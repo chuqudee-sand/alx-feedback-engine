@@ -12,6 +12,7 @@ const supabase = createClient(
 // 2. BRAND DESIGN TOKENS
 const colors = {
   berkeleyBlue: '#002B56',
+  sidebarNavy: '#001428', // Darker complement to Berkeley Blue
   springGreen: '#05F283',
   iris: '#5648B7',
   white: '#FFFFFF',
@@ -23,7 +24,7 @@ const colors = {
 };
 
 export default async function Dashboard(props: {
-  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; }>;
+  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string }>;
 }) {
   const params = await props.searchParams;
   
@@ -31,16 +32,35 @@ export default async function Dashboard(props: {
   const activeTab = params.tab || 'onboarding';
   const year = params.year || '2026';
   const quarter = params.quarter || 'Q1';
+  const month = params.month || 'All';
 
-  // 3. TIME-SERIES LOGIC
-  const quarterMap: Record<string, { start: string; end: string }> = {
-    Q1: { start: '01-01', end: '04-30' },
-    Q2: { start: '05-01', end: '08-31' },
-    Q3: { start: '09-01', end: '12-31' },
+  // 3. TIME-SERIES LOGIC (Custom 4-Month Quarters)
+  const quarterMonths: Record<string, { name: string, val: string }[]> = {
+    Q1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
+    Q2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
+    Q3: [{name: 'Sep', val: '09'}, {name: 'Oct', val: '10'}, {name: 'Nov', val: '11'}, {name: 'Dec', val: '12'}],
   };
-  const startDate = `${year}-${quarterMap[quarter].start}T00:00:00Z`;
-  const endDate = `${year}-${quarterMap[quarter].end}T23:59:59Z`;
 
+  const monthEnds: Record<string, string> = {
+    '01': '31', '02': '28', '03': '31', '04': '30',
+    '05': '31', '06': '30', '07': '31', '08': '31',
+    '09': '30', '10': '31', '11': '30', '12': '31'
+  };
+
+  let startDate, endDate;
+  if (month !== 'All') {
+    // Filter by specific month
+    startDate = `${year}-${month}-01T00:00:00Z`;
+    endDate = `${year}-${month}-${monthEnds[month]}T23:59:59Z`;
+  } else {
+    // Filter by whole quarter
+    const startMonth = quarterMonths[quarter][0].val;
+    const endMonth = quarterMonths[quarter][3].val;
+    startDate = `${year}-${startMonth}-01T00:00:00Z`;
+    endDate = `${year}-${endMonth}-${monthEnds[endMonth]}T23:59:59Z`;
+  }
+
+  // 4. DATA PIPELINE SELECTOR
   const tableMap: Record<string, string> = {
     onboarding: 'survey_onboarding',
     community: 'survey_events',
@@ -67,10 +87,10 @@ export default async function Dashboard(props: {
   const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="flex min-h-screen text-zinc-900" style={{ fontFamily: "'Poppins', sans-serif", backgroundColor: '#F1F5F9' }}>
+    <div className="flex min-h-screen text-zinc-900" style={{ fontFamily: "'Poppins', sans-serif", backgroundColor: colors.berkeleyBlue }}>
       
-      {/* SIDEBAR: BRAND PRIMARY */}
-      <aside className="w-72 p-8 flex flex-col gap-10 text-white shadow-xl" style={{ backgroundColor: colors.berkeleyBlue }}>
+      {/* SIDEBAR: DEEP NAVY FOR CONTRAST */}
+      <aside className="w-72 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-10" style={{ backgroundColor: colors.sidebarNavy }}>
         <div>
           <h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">FEEDBACK ANALYSIS</h1>
           <div className="h-1 w-12" style={{ backgroundColor: colors.springGreen }} />
@@ -78,8 +98,8 @@ export default async function Dashboard(props: {
         
         <nav className="flex flex-col gap-2">
           {['AiCE', 'VA', 'SE', 'Data Analytics', 'Cyber Security'].map(p => (
-            <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}`} 
-              className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border-l-4 ${program === p ? 'bg-white/10' : 'text-zinc-400 hover:text-white'}`}
+            <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}`} 
+              className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border-l-4 ${program === p ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
               style={{ borderColor: program === p ? colors.springGreen : 'transparent' }}>
               {p.toUpperCase()}
             </Link>
@@ -89,18 +109,47 @@ export default async function Dashboard(props: {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 p-10 overflow-y-auto">
-        <header className="flex justify-between items-end mb-10 border-b-2 pb-6 border-zinc-200">
-          <div>
-            <h2 className="text-4xl font-black mb-1 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>{program} / {activeTab.replace(/_/g, ' ')}</h2>
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-white/20 pb-6">
+          <div className="mb-6 md:mb-0">
+            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} / {activeTab.replace(/_/g, ' ')}</h2>
+            <p className="text-zinc-300 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
           </div>
           
-          <div className="flex gap-2 p-1.5 rounded-xl bg-zinc-200 shadow-inner">
-            {['Q1', 'Q2', 'Q3'].map(q => (
-              <Link key={q} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${q}`}
-                className={`px-6 py-2 rounded-lg text-[10px] font-black transition-all ${quarter === q ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-800'}`}>
-                {q}
+          {/* TIME FILTERS */}
+          <div className="flex flex-col items-end gap-3">
+            {/* Year & Quarter Selectors */}
+            <div className="flex gap-2">
+              <div className="flex bg-white/10 p-1 rounded-xl shadow-inner backdrop-blur-sm">
+                {['2025', '2026'].map(y => (
+                  <Link key={y} href={`/?program=${program}&tab=${activeTab}&year=${y}&quarter=${quarter}&month=All`}
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${year === y ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-300 hover:text-white'}`}>
+                    {y}
+                  </Link>
+                ))}
+              </div>
+              <div className="flex bg-white/10 p-1 rounded-xl shadow-inner backdrop-blur-sm">
+                {['Q1', 'Q2', 'Q3'].map(q => (
+                  <Link key={q} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${q}&month=All`}
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-300 hover:text-white'}`}>
+                    {q}
+                  </Link>
+                ))}
+              </div>
+            </div>
+            
+            {/* Dynamic Month Selectors */}
+            <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All`}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                FULL {quarter}
               </Link>
-            ))}
+              {quarterMonths[quarter].map(m => (
+                <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                  {m.name.toUpperCase()}
+                </Link>
+              ))}
+            </div>
           </div>
         </header>
 
@@ -112,22 +161,22 @@ export default async function Dashboard(props: {
             { id: 'support', label: 'LEARNER SUPPORT WEBINARS' },
             { id: 'eop', label: 'END OF PROGRAM' }
           ].map(t => (
-            <Link key={t.id} href={`/?program=${program}&tab=${t.id}&year=${year}&quarter=${quarter}`}
-              className={`pb-3 text-sm font-black tracking-widest transition-all border-b-4 ${activeTab === t.id ? '' : 'text-zinc-400 border-transparent hover:text-zinc-600'}`}
-              style={{ color: activeTab === t.id ? colors.iris : '', borderColor: activeTab === t.id ? colors.iris : '' }}>
+            <Link key={t.id} href={`/?program=${program}&tab=${t.id}&year=${year}&quarter=${quarter}&month=${month}`}
+              className={`pb-3 text-sm font-black tracking-widest transition-all border-b-4 ${activeTab === t.id ? 'text-white border-springGreen' : 'text-zinc-400 border-transparent hover:text-zinc-200'}`}
+              style={{ borderColor: activeTab === t.id ? colors.springGreen : 'transparent' }}>
               {t.label}
             </Link>
           ))}
         </div>
 
-        {/* EXECUTIVE SCORECARDS */}
+        {/* EXECUTIVE SCORECARDS WITH ANIMATION & BIGGER VALUES */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <StatCard label="TOTAL RESPONDENTS" value={total} />
+          <StatCard label="TOTAL RESPONDENTS" value={total} accent={colors.iris} />
           <StatCard label="CSAT % (4-5 RATINGS)" value={`${csatVal}%`} accent={colors.springGreen} />
           {activeTab === 'eop' && (
             <>
               <StatCard label="OVERALL NPS" value={calcNPS(entries).score} accent={colors.electricBlue} />
-              <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4 flex flex-col justify-center" style={{ borderColor: colors.iris }}>
+              <div className="bg-white p-6 rounded-2xl shadow-lg border-t-4 flex flex-col justify-center hover:scale-105 hover:shadow-2xl transition-all duration-300 cursor-default" style={{ borderColor: colors.blueNCS }}>
                 <div className="flex flex-col gap-1.5 text-[10px] font-black uppercase mb-4">
                   <span style={{ color: colors.springGreen }}>PROMOTERS: {calcNPS(entries).p}%</span>
                   <span className="text-zinc-400">PASSIVES: {calcNPS(entries).ps}%</span>
@@ -147,39 +196,39 @@ export default async function Dashboard(props: {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           
           {/* PILLAR METRICS SECTION */}
-          <section className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-zinc-100">
-            <h3 className="text-lg font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS</h3>
+          <section className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-white/10">
+            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight text-zinc-800">PILLAR METRICS</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
               {activeTab === 'onboarding' && (
                 <>
-                  <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} color={colors.springGreen} />
-                  <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} color={colors.iris} />
-                  <Metric label="ACCESS TO TECHNICAL MENTOR" val={calc(entries, 'access_tech_mentors')} color={colors.electricBlue} />
-                  <Metric label="PLATFORM BUG AWARENESS" val={calc(entries, 'help_platform_bugs')} color={colors.turquoise} />
-                  <Metric label="SUPPORT TOOL CLARITY" val={calc(entries, 'access_support_tools')} color={colors.blueNCS} />
-                  <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} color={colors.gold} />
+                  <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} />
+                  <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} />
+                  <Metric label="ACCESS TO TECHNICAL MENTOR" val={calc(entries, 'access_tech_mentors')} />
+                  <Metric label="PLATFORM BUG AWARENESS" val={calc(entries, 'help_platform_bugs')} />
+                  <Metric label="SUPPORT TOOL CLARITY" val={calc(entries, 'access_support_tools')} />
+                  <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} />
                 </>
               )}
               {activeTab === 'eop' && (
                 <>
-                  <Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} color={colors.springGreen} />
-                  <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} color={colors.iris} />
-                  <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} color={colors.electricBlue} />
-                  <Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} color={colors.turquoise} />
-                  <Metric label="TECH MENTOR SUPPORT" val={calc(entries, 'supp_mentors')} color={colors.blueNCS} />
-                  <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} color={colors.gold} />
-                  <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} color={colors.springGreen} />
-                  <Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} color={colors.iris} />
-                  <Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} color={colors.tomato} />
-                  <Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} color={colors.blueNCS} />
+                  <Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} />
+                  <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} />
+                  <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} />
+                  <Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} />
+                  <Metric label="TECH MENTOR SUPPORT" val={calc(entries, 'supp_mentors')} />
+                  <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} />
+                  <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} />
+                  <Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} />
+                  <Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} />
+                  <Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} />
                 </>
               )}
             </div>
 
             {/* DEMOGRAPHICS COMPARATIVE VISUALIZER */}
             {activeTab === 'eop' && (
-              <div className="mt-12 pt-8 border-t-2 border-zinc-50">
+              <div className="mt-12 pt-8 border-t border-zinc-200">
                 <h3 className="text-xs font-black uppercase tracking-[0.1em] text-zinc-500 mb-6">DEMOGRAPHICS COMPARISON</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                    <DemographicChart data={entries} column="employment_status" title="EMPLOYMENT STATUS" colorsArr={[colors.berkeleyBlue, colors.blueNCS, colors.electricBlue, colors.turquoise]} />
@@ -190,7 +239,7 @@ export default async function Dashboard(props: {
           </section>
 
           {/* THEMATIC WORD CLOUD */}
-          <aside className="bg-white p-8 rounded-3xl shadow-sm border border-zinc-100 h-fit text-center">
+          <aside className="bg-white p-8 rounded-3xl shadow-xl h-fit text-center hover:scale-105 transition-transform duration-300">
             <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-8">THEMATIC WORD CLOUD</h3>
             <div className="flex flex-wrap gap-4 items-center justify-center italic opacity-90 leading-relaxed">
                <span className="text-4xl font-black" style={{ color: colors.berkeleyBlue }}>SAVANNA</span>
@@ -212,67 +261,65 @@ export default async function Dashboard(props: {
 
 function StatCard({ label, value, accent = '#E2E8F0' }: any) {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4" style={{ borderColor: accent }}>
-      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">{label}</p>
-      <h4 className="text-3xl font-black" style={{ color: colors.berkeleyBlue }}>{value}</h4>
+    <div className="bg-white p-6 rounded-2xl shadow-lg border-t-4 hover:scale-105 hover:shadow-2xl transition-all duration-300 cursor-default" style={{ borderColor: accent }}>
+      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">{label}</p>
+      {/* Values are now significantly larger (text-5xl) */}
+      <h4 className="text-5xl font-black" style={{ color: colors.berkeleyBlue }}>{value}</h4>
     </div>
   );
 }
 
-// REDESIGNED: THICK PILL BARS
-function Metric({ label, val, color }: any) {
-  const width = (val / 5) * 100;
-  // If score is critically low, overwrite color with tomato red
-  const finalColor = val < 3.5 ? colors.tomato : color; 
+// REDESIGNED DYNAMIC METRIC BARS WITH ANIMATION
+function Metric({ label, val }: any) {
+  const numVal = Number(val);
+  const width = (numVal / 5) * 100;
+  
+  // Dynamic Color Logic: Red (< 4.0), Blue (4.0 - 4.4), Green (4.5 - 5.0)
+  let finalColor = colors.tomato; 
+  if (numVal >= 4.5) finalColor = colors.springGreen;
+  else if (numVal >= 4.0) finalColor = colors.blueNCS; 
   
   return (
-    <div className="group">
+    <div className="group p-2 rounded-xl hover:bg-zinc-50 hover:scale-105 transition-all duration-300 cursor-default">
       <div className="flex justify-between items-end mb-2">
         <span className="text-[10px] font-black text-zinc-600 tracking-tight uppercase">{label}</span>
         <span className="text-xs font-black" style={{ color: colors.berkeleyBlue }}>{val} / 5.0</span>
       </div>
       {/* Thick pill container with inner shadow */}
-      <div className="h-6 bg-zinc-100 rounded-full overflow-hidden shadow-inner p-0.5">
+      <div className="h-6 bg-zinc-200 rounded-full overflow-hidden shadow-inner p-0.5">
         <div style={{ width: `${width}%`, backgroundColor: finalColor }} className="h-full rounded-full transition-all duration-700 shadow-sm" />
       </div>
     </div>
   );
 }
 
-// NEW: COMPARATIVE DEMOGRAPHICS VISUALIZER
 function DemographicChart({ data, column, title, colorsArr }: any) {
   if (!data?.length) return null;
   
-  // Calculate frequencies
   const counts: Record<string, number> = {};
   data.forEach((d: any) => {
     const val = d[column] || 'Unknown/Other';
     counts[val] = (counts[val] || 0) + 1;
   });
   
-  // Convert to array and sort by percentage
   const total = data.length;
   const segments = Object.entries(counts)
     .map(([label, count]) => ({ label, pct: Math.round((count / total) * 100) }))
     .sort((a, b) => b.pct - a.pct)
-    .slice(0, 4); // Show top 4 to keep UI clean
+    .slice(0, 4);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 group hover:scale-[1.02] transition-transform duration-300">
       <h4 className="text-[10px] font-black text-zinc-400 tracking-widest uppercase">{title}</h4>
-      
-      {/* The Stacked Comparative Bar */}
       <div className="flex h-6 rounded-full overflow-hidden shadow-inner p-0.5 bg-zinc-100">
         {segments.map((seg, i) => (
           <div key={seg.label} style={{ width: `${seg.pct}%`, backgroundColor: colorsArr[i % colorsArr.length] }} className="h-full first:rounded-l-full last:rounded-r-full" title={`${seg.label}: ${seg.pct}%`} />
         ))}
       </div>
-      
-      {/* The Legend */}
       <div className="grid grid-cols-2 gap-2 mt-3">
         {segments.map((seg, i) => (
           <div key={seg.label} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorsArr[i % colorsArr.length] }} />
+            <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: colorsArr[i % colorsArr.length] }} />
             <span className="text-[10px] font-bold text-zinc-600 truncate">{seg.label} <span className="text-zinc-400">({seg.pct}%)</span></span>
           </div>
         ))}
