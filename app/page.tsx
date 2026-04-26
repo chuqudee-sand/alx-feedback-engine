@@ -12,7 +12,7 @@ const supabase = createClient(
 // 2. BRAND DESIGN TOKENS
 const colors = {
   berkeleyBlue: '#002B56',
-  sidebarNavy: '#001428', // Darker complement to Berkeley Blue
+  sidebarNavy: '#001428',
   springGreen: '#05F283',
   iris: '#5648B7',
   white: '#FFFFFF',
@@ -34,7 +34,7 @@ export default async function Dashboard(props: {
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
 
-  // 3. TIME-SERIES LOGIC (Custom 4-Month Quarters)
+  // 3. TIME-SERIES LOGIC
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
     Q1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
     Q2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
@@ -49,18 +49,16 @@ export default async function Dashboard(props: {
 
   let startDate, endDate;
   if (month !== 'All') {
-    // Filter by specific month
     startDate = `${year}-${month}-01T00:00:00Z`;
     endDate = `${year}-${month}-${monthEnds[month]}T23:59:59Z`;
   } else {
-    // Filter by whole quarter
     const startMonth = quarterMonths[quarter][0].val;
     const endMonth = quarterMonths[quarter][3].val;
     startDate = `${year}-${startMonth}-01T00:00:00Z`;
     endDate = `${year}-${endMonth}-${monthEnds[endMonth]}T23:59:59Z`;
   }
 
-  // 4. DATA PIPELINE SELECTOR
+  // 4. DATA PIPELINE
   const tableMap: Record<string, string> = {
     onboarding: 'survey_onboarding',
     community: 'survey_events',
@@ -69,14 +67,12 @@ export default async function Dashboard(props: {
   };
 
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
-  
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Technical Mentorship');
 
   const { data: entries, error } = await query;
   const total = entries?.length || 0;
 
-  // 5. CSAT AGGREGATION LOGIC
   const csatCol = { 
     onboarding: 'sat_next_steps', 
     community: 'session_quality_csat', 
@@ -89,7 +85,7 @@ export default async function Dashboard(props: {
   return (
     <div className="flex min-h-screen text-zinc-900" style={{ fontFamily: "'Poppins', sans-serif", backgroundColor: colors.berkeleyBlue }}>
       
-      {/* SIDEBAR: DEEP NAVY FOR CONTRAST */}
+      {/* SIDEBAR */}
       <aside className="w-72 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-10" style={{ backgroundColor: colors.sidebarNavy }}>
         <div>
           <h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">FEEDBACK ANALYSIS</h1>
@@ -107,7 +103,7 @@ export default async function Dashboard(props: {
         </nav>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 p-10 overflow-y-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-white/20 pb-6">
           <div className="mb-6 md:mb-0">
@@ -115,9 +111,7 @@ export default async function Dashboard(props: {
             <p className="text-zinc-300 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
           </div>
           
-          {/* TIME FILTERS */}
           <div className="flex flex-col items-end gap-3">
-            {/* Year & Quarter Selectors */}
             <div className="flex gap-2">
               <div className="flex bg-white/10 p-1 rounded-xl shadow-inner backdrop-blur-sm">
                 {['2025', '2026'].map(y => (
@@ -137,7 +131,6 @@ export default async function Dashboard(props: {
               </div>
             </div>
             
-            {/* Dynamic Month Selectors */}
             <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
               <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All`}
                 className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'}`}>
@@ -153,7 +146,7 @@ export default async function Dashboard(props: {
           </div>
         </header>
 
-        {/* MILESTONE NAVIGATION TABS */}
+        {/* NAVIGATION TABS */}
         <div className="flex gap-10 mb-10">
           {[
             { id: 'onboarding', label: 'ONBOARDING' },
@@ -169,7 +162,7 @@ export default async function Dashboard(props: {
           ))}
         </div>
 
-        {/* EXECUTIVE SCORECARDS WITH ANIMATION & BIGGER VALUES */}
+        {/* SCORECARDS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <StatCard label="TOTAL RESPONDENTS" value={total} accent={colors.iris} />
           <StatCard label="CSAT % (4-5 RATINGS)" value={`${csatVal}%`} accent={colors.springGreen} />
@@ -182,7 +175,6 @@ export default async function Dashboard(props: {
                   <span className="text-zinc-400">PASSIVES: {calcNPS(entries).ps}%</span>
                   <span style={{ color: colors.tomato }}>DETRACTORS: {calcNPS(entries).d}%</span>
                 </div>
-                {/* Thick Pill-shaped bar for NPS */}
                 <div className="flex h-5 rounded-full overflow-hidden bg-zinc-100 shadow-inner p-0.5">
                   <div style={{ width: `${calcNPS(entries).p}%`, backgroundColor: colors.springGreen }} className="rounded-l-full" />
                   <div style={{ width: `${calcNPS(entries).ps}%`, backgroundColor: '#CBD5E1' }} />
@@ -193,11 +185,10 @@ export default async function Dashboard(props: {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          
-          {/* PILLAR METRICS SECTION */}
+        {/* ROW 1: METRICS & DEMOS */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-10">
           <section className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-white/10">
-            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight text-zinc-800">PILLAR METRICS</h3>
+            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS (AVERAGES)</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
               {activeTab === 'onboarding' && (
@@ -226,7 +217,6 @@ export default async function Dashboard(props: {
               )}
             </div>
 
-            {/* DEMOGRAPHICS COMPARATIVE VISUALIZER */}
             {activeTab === 'eop' && (
               <div className="mt-12 pt-8 border-t border-zinc-200">
                 <h3 className="text-xs font-black uppercase tracking-[0.1em] text-zinc-500 mb-6">DEMOGRAPHICS COMPARISON</h3>
@@ -252,6 +242,41 @@ export default async function Dashboard(props: {
             </div>
           </aside>
         </div>
+
+        {/* NEW ROW: TOP-BOX INTELLIGENCE CONTAINER */}
+        {(activeTab === 'onboarding' || activeTab === 'eop') && (
+          <section className="bg-white p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ borderColor: colors.iris }}>
+            <h3 className="text-2xl font-black mb-2 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>ACTIONABLE INTELLIGENCE (TOP-BOX SCORING)</h3>
+            <p className="text-zinc-500 text-sm italic mb-8">Percentage of respondents scoring 4 or 5. Extracted directly from Framework metrics.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {activeTab === 'onboarding' && (
+                <>
+                  <InsightRow pct={calcTopBox(entries, 'sat_next_steps')} text="are highly satisfied with their onboarding experience and confidently know their next steps." />
+                  <InsightRow pct={calcTopBox(entries, 'clear_expectations')} text="completely understand the program's expectations and graduation requirements." />
+                  <InsightRow pct={calcTopBox(entries, 'access_tech_mentors')} text="know exactly how to access Technical Mentors for expert guidance when needed." />
+                  <InsightRow pct={calcTopBox(entries, 'help_platform_bugs')} text="know where to go to get help with platform issues and technical bugs." />
+                  <InsightRow pct={calcTopBox(entries, 'access_support_tools')} text="are clear on how to access key support tools like LEA, Chidi, and PeerFinder." />
+                  <InsightRow pct={calcTopBox(entries, 'comms_useful')} text="found emails and community communications clear and highly useful for getting started." />
+                </>
+              )}
+              {activeTab === 'eop' && (
+                <>
+                  <InsightRow pct={calcTopBox(entries, 'overall_sat')} text="are highly satisfied with their overall program experience." />
+                  <InsightRow pct={calcTopBox(entries, 'career_impact')} text="feel the program was highly effective in enhancing their skills and advancing their careers." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_events')} text="say community events kept them motivated, engaged, and on track to complete the program." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_peers')} text="felt well-supported and motivated by their peers throughout their learning journey." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_mentors')} text="state that Technical Mentor support contributed meaningfully to their learning." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_lea')} text="found the LEA AI Assistant easily accessible and highly useful when facing challenges." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_chidi')} text="relied on Chidi AI to successfully navigate and overcome learning content challenges." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_prog_team')} text="received timely and helpful guidance from the Program Team communications." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_peerfinder')} text="successfully used the PeerFinder tool to connect with peers for collaboration." />
+                  <InsightRow pct={calcTopBox(entries, 'supp_hub')} text="found the Program Guides and Resources Hub essential for supporting their journey." />
+                </>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
@@ -263,18 +288,15 @@ function StatCard({ label, value, accent = '#E2E8F0' }: any) {
   return (
     <div className="bg-white p-6 rounded-2xl shadow-lg border-t-4 hover:scale-105 hover:shadow-2xl transition-all duration-300 cursor-default" style={{ borderColor: accent }}>
       <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">{label}</p>
-      {/* Values are now significantly larger (text-5xl) */}
       <h4 className="text-5xl font-black" style={{ color: colors.berkeleyBlue }}>{value}</h4>
     </div>
   );
 }
 
-// REDESIGNED DYNAMIC METRIC BARS WITH ANIMATION
 function Metric({ label, val }: any) {
   const numVal = Number(val);
   const width = (numVal / 5) * 100;
   
-  // Dynamic Color Logic: Red (< 4.0), Blue (4.0 - 4.4), Green (4.5 - 5.0)
   let finalColor = colors.tomato; 
   if (numVal >= 4.5) finalColor = colors.springGreen;
   else if (numVal >= 4.0) finalColor = colors.blueNCS; 
@@ -285,10 +307,28 @@ function Metric({ label, val }: any) {
         <span className="text-[10px] font-black text-zinc-600 tracking-tight uppercase">{label}</span>
         <span className="text-xs font-black" style={{ color: colors.berkeleyBlue }}>{val} / 5.0</span>
       </div>
-      {/* Thick pill container with inner shadow */}
       <div className="h-6 bg-zinc-200 rounded-full overflow-hidden shadow-inner p-0.5">
         <div style={{ width: `${width}%`, backgroundColor: finalColor }} className="h-full rounded-full transition-all duration-700 shadow-sm" />
       </div>
+    </div>
+  );
+}
+
+// NEW: TOP-BOX INSIGHT ROW COMPONENT
+function InsightRow({ pct, text }: { pct: number, text: string }) {
+  // Color coding the intelligence metric
+  let pctColor = colors.tomato;
+  if (pct >= 80) pctColor = colors.springGreen;
+  else if (pct >= 60) pctColor = colors.blueNCS;
+
+  return (
+    <div className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-50 hover:bg-zinc-100 hover:scale-[1.02] transition-transform duration-300 border border-zinc-200">
+      <div className="flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center shadow-inner" style={{ backgroundColor: `${pctColor}20` }}>
+        <span className="text-xl font-black" style={{ color: pctColor }}>{pct}%</span>
+      </div>
+      <p className="text-sm text-zinc-700 font-medium leading-snug">
+        <strong style={{ color: colors.berkeleyBlue }}>{pct}% of respondents</strong> {text}
+      </p>
     </div>
   );
 }
@@ -328,10 +368,21 @@ function DemographicChart({ data, column, title, colorsArr }: any) {
   );
 }
 
+// DATA MATH HELPERS
 function calc(data: any[] | null, col: string) {
   if (!data?.length) return 0;
   const valid = data.filter(d => d[col] !== null);
   return (valid.reduce((a, c) => a + (c[col] || 0), 0) / (valid.length || 1)).toFixed(1);
+}
+
+// NEW: CALC TOP BOX FUNCTION
+function calcTopBox(data: any[] | null, col: string) {
+  if (!data?.length) return 0;
+  const valid = data.filter(d => d[col] !== null); // Remove blanks
+  if (valid.length === 0) return 0;
+  
+  const topBoxCount = valid.filter(d => d[col] >= 4).length; // Count 4s and 5s
+  return Math.round((topBoxCount / valid.length) * 100);
 }
 
 function calcNPS(data: any[] | null) {
