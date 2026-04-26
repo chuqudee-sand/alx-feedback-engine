@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 
-// 1. ARCHITECTURAL SETTINGS
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(
@@ -9,7 +8,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 2. BRAND DESIGN TOKENS
 const colors = {
   berkeleyBlue: '#002B56',
   sidebarNavy: '#001428',
@@ -34,7 +32,6 @@ export default async function Dashboard(props: {
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
 
-  // 3. TIME-SERIES LOGIC
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
     Q1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
     Q2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
@@ -58,7 +55,6 @@ export default async function Dashboard(props: {
     endDate = `${year}-${endMonth}-${monthEnds[endMonth]}T23:59:59Z`;
   }
 
-  // 4. DATA PIPELINE
   const tableMap: Record<string, string> = {
     onboarding: 'survey_onboarding',
     community: 'survey_events',
@@ -66,7 +62,6 @@ export default async function Dashboard(props: {
     eop: 'survey_eop',
   };
 
-  // Fetch quantitative survey data
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Technical Mentorship');
@@ -74,27 +69,27 @@ export default async function Dashboard(props: {
   const { data: entries, error } = await query;
   const total = entries?.length || 0;
 
-  // Fetch AI Thematic Summaries for this specific tab and program
   const { data: aiSummaries } = await supabase
     .from('ai_thematic_summaries')
     .select('*')
     .eq('program', program)
     .eq('tab_name', activeTab)
     .order('created_at', { ascending: false })
-    .limit(5); // Show top 5 themes
+    .limit(5);
 
-  // 5. CSAT AGGREGATION LOGIC
-  const csatCol = { 
-    onboarding: 'sat_next_steps', 
-    community: 'session_quality_csat', 
-    support: 'session_quality_csat', 
-    eop: 'overall_sat' 
-  }[activeTab];
-  
+  const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
   const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="flex min-h-screen text-zinc-900" style={{ fontFamily: "'Poppins', sans-serif", backgroundColor: colors.berkeleyBlue }}>
+    // BRANDING BACKGROUND UPDATE: The background image logic is injected here.
+    <div className="flex min-h-screen text-zinc-900 bg-fixed bg-center bg-no-repeat bg-cover" 
+         style={{ 
+           fontFamily: "'Poppins', sans-serif", 
+           backgroundColor: colors.berkeleyBlue,
+           backgroundImage: "url('/alx-logo-transparent.png')",
+           backgroundSize: "40%", // Keeps the logo centered and visible
+           backgroundBlendMode: "overlay" // Blends it softly with the Berkeley Blue
+         }}>
       
       {/* SIDEBAR */}
       <aside className="w-72 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-10" style={{ backgroundColor: colors.sidebarNavy }}>
@@ -115,41 +110,41 @@ export default async function Dashboard(props: {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-10 overflow-y-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-white/20 pb-6">
+      <main className="flex-1 p-10 overflow-y-auto bg-white/95 backdrop-blur-sm">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-zinc-200 pb-6">
           <div className="mb-6 md:mb-0">
-            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} / {activeTab.replace(/_/g, ' ')}</h2>
-            <p className="text-zinc-300 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
+            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>{program} / {activeTab.replace(/_/g, ' ')}</h2>
+            <p className="text-zinc-500 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
           </div>
           
           <div className="flex flex-col items-end gap-3">
             <div className="flex gap-2">
-              <div className="flex bg-white/10 p-1 rounded-xl shadow-inner backdrop-blur-sm">
+              <div className="flex bg-zinc-100 p-1 rounded-xl shadow-inner border border-zinc-200">
                 {['2025', '2026'].map(y => (
                   <Link key={y} href={`/?program=${program}&tab=${activeTab}&year=${y}&quarter=${quarter}&month=All`}
-                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${year === y ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-300 hover:text-white'}`}>
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${year === y ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>
                     {y}
                   </Link>
                 ))}
               </div>
-              <div className="flex bg-white/10 p-1 rounded-xl shadow-inner backdrop-blur-sm">
+              <div className="flex bg-zinc-100 p-1 rounded-xl shadow-inner border border-zinc-200">
                 {['Q1', 'Q2', 'Q3'].map(q => (
                   <Link key={q} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${q}&month=All`}
-                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-300 hover:text-white'}`}>
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-700'}`}>
                     {q}
                   </Link>
                 ))}
               </div>
             </div>
             
-            <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+            <div className="flex gap-1 bg-zinc-50 p-1 rounded-xl border border-zinc-200">
               <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All`}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-800'}`}>
                 FULL {quarter}
               </Link>
               {quarterMonths[quarter].map(m => (
                 <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}`}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-800'}`}>
                   {m.name.toUpperCase()}
                 </Link>
               ))}
@@ -157,7 +152,7 @@ export default async function Dashboard(props: {
           </div>
         </header>
 
-        {/* NAVIGATION TABS */}
+        {/* TABS */}
         <div className="flex gap-10 mb-10">
           {[
             { id: 'onboarding', label: 'ONBOARDING' },
@@ -166,8 +161,8 @@ export default async function Dashboard(props: {
             { id: 'eop', label: 'END OF PROGRAM' }
           ].map(t => (
             <Link key={t.id} href={`/?program=${program}&tab=${t.id}&year=${year}&quarter=${quarter}&month=${month}`}
-              className={`pb-3 text-sm font-black tracking-widest transition-all border-b-4 ${activeTab === t.id ? 'text-white border-springGreen' : 'text-zinc-400 border-transparent hover:text-zinc-200'}`}
-              style={{ borderColor: activeTab === t.id ? colors.springGreen : 'transparent' }}>
+              className={`pb-3 text-sm font-black tracking-widest transition-all border-b-4 ${activeTab === t.id ? 'border-springGreen' : 'text-zinc-400 border-transparent hover:text-zinc-600'}`}
+              style={{ color: activeTab === t.id ? colors.berkeleyBlue : '', borderColor: activeTab === t.id ? colors.springGreen : 'transparent' }}>
               {t.label}
             </Link>
           ))}
@@ -177,6 +172,12 @@ export default async function Dashboard(props: {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <StatCard label="TOTAL RESPONDENTS" value={total} accent={colors.iris} />
           <StatCard label="CSAT % (4-5 RATINGS)" value={`${csatVal}%`} accent={colors.springGreen} />
+          
+          {/* Support Tab Specific Scorecard */}
+          {activeTab === 'support' && (
+             <StatCard label="OUTCOME UNDERSTOOD %" value={`${calcOutcome(entries)}%`} accent={colors.blueNCS} />
+          )}
+
           {activeTab === 'eop' && (
             <>
               <StatCard label="OVERALL NPS" value={calcNPS(entries).score} accent={colors.electricBlue} />
@@ -196,77 +197,78 @@ export default async function Dashboard(props: {
           )}
         </div>
 
-        {/* ROW 1: METRICS & AI INSIGHTS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-10">
-          <section className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-white/10">
-            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS (AVERAGES)</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-              {activeTab === 'onboarding' && (
-                <>
-                  <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} />
-                  <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} />
-                  <Metric label="ACCESS TO TECHNICAL MENTOR" val={calc(entries, 'access_tech_mentors')} />
-                  <Metric label="PLATFORM BUG AWARENESS" val={calc(entries, 'help_platform_bugs')} />
-                  <Metric label="SUPPORT TOOL CLARITY" val={calc(entries, 'access_support_tools')} />
-                  <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} />
-                </>
-              )}
-              {activeTab === 'eop' && (
-                <>
-                  <Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} />
-                  <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} />
-                  <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} />
-                  <Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} />
-                  <Metric label="TECH MENTOR SUPPORT" val={calc(entries, 'supp_mentors')} />
-                  <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} />
-                  <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} />
-                  <Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} />
-                  <Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} />
-                  <Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} />
-                </>
-              )}
-            </div>
-
+        {/* PILLAR METRICS (FULL WIDTH NOW) */}
+        <section className="bg-white p-8 rounded-3xl shadow-xl border border-zinc-100 mb-10">
+          <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS (AVERAGES)</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
+            {activeTab === 'onboarding' && (
+              <>
+                <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} type="sat" />
+                <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} type="agree" />
+                <Metric label="ACCESS TO TECHNICAL MENTOR" val={calc(entries, 'access_tech_mentors')} type="agree" />
+                <Metric label="PLATFORM BUG AWARENESS" val={calc(entries, 'help_platform_bugs')} type="agree" />
+                <Metric label="SUPPORT TOOL CLARITY" val={calc(entries, 'access_support_tools')} type="agree" />
+                <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} type="help" />
+              </>
+            )}
             {activeTab === 'eop' && (
-              <div className="mt-12 pt-8 border-t border-zinc-200">
-                <h3 className="text-xs font-black uppercase tracking-[0.1em] text-zinc-500 mb-6">DEMOGRAPHICS COMPARISON</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                   <DemographicChart data={entries} column="employment_status" title="EMPLOYMENT STATUS" colorsArr={[colors.berkeleyBlue, colors.blueNCS, colors.electricBlue, colors.turquoise]} />
-                   <DemographicChart data={entries} column="city_residence" title="CITY OF RESIDENCE" colorsArr={[colors.iris, colors.springGreen, colors.gold, colors.tomato]} />
+              <>
+                <Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} type="sat" />
+                <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} type="help" />
+                <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} type="agree" />
+                <Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} type="agree" />
+                <Metric label="TECH MENTOR SUPPORT" val={calc(entries, 'supp_mentors')} type="agree" />
+                <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} type="agree" />
+                <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} type="agree" />
+                <Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} type="agree" />
+                <Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} type="agree" />
+                <Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} type="agree" />
+              </>
+            )}
+            {(activeTab === 'community' || activeTab === 'support') && (
+              <Metric label="SESSION QUALITY RATING" val={calc(entries, 'session_quality_csat')} type="quality" />
+            )}
+          </div>
+
+          {activeTab === 'eop' && (
+            <div className="mt-12 pt-8 border-t border-zinc-200">
+              <h3 className="text-xs font-black uppercase tracking-[0.1em] text-zinc-500 mb-6">DEMOGRAPHICS COMPARISON</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                 <DemographicChart data={entries} column="employment_status" title="EMPLOYMENT STATUS" colorsArr={[colors.berkeleyBlue, colors.blueNCS, colors.electricBlue, colors.turquoise]} />
+                 <DemographicChart data={entries} column="city_residence" title="CITY OF RESIDENCE" colorsArr={[colors.iris, colors.springGreen, colors.gold, colors.tomato]} />
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* FULL WIDTH AI THEMATIC FEED */}
+        <section className="bg-white p-10 rounded-3xl shadow-xl border-t-8 h-fit hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ borderColor: colors.iris }}>
+          <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4">
+            <h3 className="text-lg font-black uppercase tracking-widest" style={{ color: colors.berkeleyBlue }}>AI THEMATIC SUMMARY</h3>
+            <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-md" style={{ color: colors.iris, backgroundColor: `${colors.iris}15` }}>Latest Insights</span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {aiSummaries && aiSummaries.length > 0 ? (
+              aiSummaries.map((summary) => (
+                <div key={summary.id} className="border-l-4 pl-6 py-2 bg-zinc-50 rounded-r-xl" style={{ borderColor: colors.electricBlue }}>
+                  <div className="flex justify-between items-start mb-3 gap-2">
+                    <h4 className="text-base font-black uppercase tracking-tight leading-tight" style={{ color: colors.berkeleyBlue }}>{summary.theme_title}</h4>
+                    <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200 px-3 py-1 rounded-full whitespace-nowrap">{summary.response_count} Mentions</span>
+                  </div>
+                  <p className="text-sm text-zinc-600 leading-relaxed italic">
+                    "{summary.summary_text}"
+                  </p>
                 </div>
+              ))
+            ) : (
+              <div className="text-center p-8 bg-zinc-50 rounded-2xl border border-zinc-100 md:col-span-2">
+                <p className="text-sm text-zinc-400 font-bold italic">No AI summaries generated for this tab yet.</p>
               </div>
             )}
-          </section>
-
-          {/* AI THEMATIC FEED REPLACES WORD CLOUD */}
-          <aside className="bg-white p-8 rounded-3xl shadow-xl border-t-8 h-fit hover:scale-[1.01] transition-transform duration-300" style={{ borderColor: colors.iris }}>
-            <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4">
-              <h3 className="text-xs font-black uppercase tracking-widest" style={{ color: colors.berkeleyBlue }}>AI THEMATIC SUMMARY</h3>
-              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md" style={{ color: colors.iris, backgroundColor: `${colors.iris}15` }}>Latest Insights</span>
-            </div>
-            
-            <div className="space-y-8">
-              {aiSummaries && aiSummaries.length > 0 ? (
-                aiSummaries.map((summary) => (
-                  <div key={summary.id} className="border-l-4 pl-4 py-1" style={{ borderColor: colors.electricBlue }}>
-                    <div className="flex justify-between items-start mb-2 gap-2">
-                      <h4 className="text-sm font-black uppercase tracking-tight leading-tight" style={{ color: colors.berkeleyBlue }}>{summary.theme_title}</h4>
-                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full whitespace-nowrap">{summary.response_count} Mentions</span>
-                    </div>
-                    <p className="text-xs text-zinc-600 leading-relaxed italic">
-                      "{summary.summary_text}"
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center p-8 bg-zinc-50 rounded-2xl border border-zinc-100">
-                  <p className="text-xs text-zinc-400 font-bold italic">No AI summaries generated for this tab yet.</p>
-                </div>
-              )}
-            </div>
-          </aside>
-        </div>
+          </div>
+        </section>
 
         {/* TOP-BOX INTELLIGENCE CONTAINER */}
         {(activeTab === 'onboarding' || activeTab === 'eop') && (
@@ -318,19 +320,35 @@ function StatCard({ label, value, accent = '#E2E8F0' }: any) {
   );
 }
 
-function Metric({ label, val }: any) {
+// HELPER: Determine label string based on score and question type
+function getScaleLabel(val: number, type: string) {
+  if (val >= 4.5) return type === 'agree' ? 'Strongly Agreed' : type === 'help' ? 'Very Helpful' : type === 'quality' ? 'Excellent' : 'Highly Satisfied';
+  if (val >= 3.9) return type === 'agree' ? 'Agreed' : type === 'help' ? 'Helpful' : type === 'quality' ? 'Very Good' : 'Satisfied';
+  if (val >= 3.3) return type === 'agree' ? 'Neither' : type === 'help' ? 'Moderate' : type === 'quality' ? 'Good' : 'Neutral';
+  if (val >= 2.0) return type === 'agree' ? 'Disagreed' : type === 'help' ? 'Unhelpful' : type === 'quality' ? 'Fair' : 'Dissatisfied';
+  return type === 'agree' ? 'Strongly Disagreed' : type === 'help' ? 'Very Unhelpful' : type === 'quality' ? 'Poor' : 'Very Dissatisfied';
+}
+
+function Metric({ label, val, type = 'sat' }: any) {
   const numVal = Number(val);
   const width = (numVal / 5) * 100;
   
   let finalColor = colors.tomato; 
   if (numVal >= 4.5) finalColor = colors.springGreen;
-  else if (numVal >= 4.0) finalColor = colors.blueNCS; 
+  else if (numVal >= 3.9) finalColor = colors.blueNCS; 
+  else if (numVal >= 3.3) finalColor = colors.gold;
+
+  const scaleText = getScaleLabel(numVal, type);
   
   return (
-    <div className="group p-2 rounded-xl hover:bg-zinc-50 hover:scale-105 transition-all duration-300 cursor-default">
+    <div className="group p-3 rounded-xl hover:bg-zinc-50 hover:scale-[1.02] transition-all duration-300 cursor-default border border-transparent hover:border-zinc-200">
       <div className="flex justify-between items-end mb-2">
-        <span className="text-[10px] font-black text-zinc-600 tracking-tight uppercase">{label}</span>
-        <span className="text-xs font-black" style={{ color: colors.berkeleyBlue }}>{val} / 5.0</span>
+        <span className="text-[11px] font-black text-zinc-600 tracking-tight uppercase">{label}</span>
+        <div className="flex items-center gap-3">
+          {/* INSERTED: The dynamic text label between pillar and score */}
+          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: finalColor }}>{scaleText}</span>
+          <span className="text-sm font-black" style={{ color: colors.berkeleyBlue }}>{val} / 5.0</span>
+        </div>
       </div>
       <div className="h-6 bg-zinc-200 rounded-full overflow-hidden shadow-inner p-0.5">
         <div style={{ width: `${width}%`, backgroundColor: finalColor }} className="h-full rounded-full transition-all duration-700 shadow-sm" />
@@ -391,7 +409,6 @@ function DemographicChart({ data, column, title, colorsArr }: any) {
   );
 }
 
-// DATA MATH HELPERS
 function calc(data: any[] | null, col: string) {
   if (!data?.length) return 0;
   const valid = data.filter(d => d[col] !== null);
@@ -402,9 +419,17 @@ function calcTopBox(data: any[] | null, col: string) {
   if (!data?.length) return 0;
   const valid = data.filter(d => d[col] !== null); 
   if (valid.length === 0) return 0;
-  
   const topBoxCount = valid.filter(d => d[col] >= 4).length; 
   return Math.round((topBoxCount / valid.length) * 100);
+}
+
+// Calculates percentage of "True" responses
+function calcOutcome(data: any[]) {
+  if(!data?.length) return 0;
+  const valid = data.filter(d => d.understood_outcomes !== null);
+  if(!valid.length) return 0;
+  const yesCount = valid.filter(d => d.understood_outcomes === true).length;
+  return ((yesCount / valid.length) * 100).toFixed(0);
 }
 
 function calcNPS(data: any[] | null) {
