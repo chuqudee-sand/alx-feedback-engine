@@ -33,6 +33,7 @@ export default async function Dashboard(props: {
   const year = params.year || '2026';
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
+  const tab = '->';
 
   // 3. TIME-SERIES LOGIC
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
@@ -107,7 +108,7 @@ export default async function Dashboard(props: {
       <main className="flex-1 p-10 overflow-y-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-white/20 pb-6">
           <div className="mb-6 md:mb-0">
-            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} / {activeTab.replace(/_/g, ' ')}</h2>
+            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} {tab} {activeTab.replace(/_/g, ' ')}</h2>
             <p className="text-zinc-300 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
           </div>
           
