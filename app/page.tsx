@@ -39,7 +39,7 @@ export default async function Dashboard(props: {
 
   // THEME VARIABLES
   const t = {
-    bg: isDark ? colors.berkeleyBlue : '#F4F7FA',
+    bg: isDark ? colors.berkeleyBlue : '#ebecee',
     sidebar: isDark ? colors.sidebarNavy : colors.berkeleyBlue,
     cardBg: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.white,
     cardBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
