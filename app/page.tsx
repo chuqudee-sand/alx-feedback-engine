@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 
+// 1. ARCHITECTURAL SETTINGS
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(
@@ -81,14 +82,13 @@ export default async function Dashboard(props: {
   const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
 
   return (
-    // BRANDING BACKGROUND UPDATE: The background image logic is injected here.
     <div className="flex min-h-screen text-zinc-900 bg-fixed bg-center bg-no-repeat bg-cover" 
          style={{ 
            fontFamily: "'Poppins', sans-serif", 
            backgroundColor: colors.berkeleyBlue,
            backgroundImage: "url('/alx-logo-transparent.png')",
-           backgroundSize: "40%", // Keeps the logo centered and visible
-           backgroundBlendMode: "overlay" // Blends it softly with the Berkeley Blue
+           backgroundSize: "40%", 
+           backgroundBlendMode: "overlay" 
          }}>
       
       {/* SIDEBAR */}
@@ -197,7 +197,7 @@ export default async function Dashboard(props: {
           )}
         </div>
 
-        {/* PILLAR METRICS (FULL WIDTH NOW) */}
+        {/* PILLAR METRICS */}
         <section className="bg-white p-8 rounded-3xl shadow-xl border border-zinc-100 mb-10">
           <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS (AVERAGES)</h3>
           
@@ -320,7 +320,6 @@ function StatCard({ label, value, accent = '#E2E8F0' }: any) {
   );
 }
 
-// HELPER: Determine label string based on score and question type
 function getScaleLabel(val: number, type: string) {
   if (val >= 4.5) return type === 'agree' ? 'Strongly Agreed' : type === 'help' ? 'Very Helpful' : type === 'quality' ? 'Excellent' : 'Highly Satisfied';
   if (val >= 3.9) return type === 'agree' ? 'Agreed' : type === 'help' ? 'Helpful' : type === 'quality' ? 'Very Good' : 'Satisfied';
@@ -345,7 +344,6 @@ function Metric({ label, val, type = 'sat' }: any) {
       <div className="flex justify-between items-end mb-2">
         <span className="text-[11px] font-black text-zinc-600 tracking-tight uppercase">{label}</span>
         <div className="flex items-center gap-3">
-          {/* INSERTED: The dynamic text label between pillar and score */}
           <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: finalColor }}>{scaleText}</span>
           <span className="text-sm font-black" style={{ color: colors.berkeleyBlue }}>{val} / 5.0</span>
         </div>
@@ -423,8 +421,8 @@ function calcTopBox(data: any[] | null, col: string) {
   return Math.round((topBoxCount / valid.length) * 100);
 }
 
-// Calculates percentage of "True" responses
-function calcOutcome(data: any[]) {
+// FIXED: Added the `| null` to the signature to resolve the Vercel Build TS error
+function calcOutcome(data: any[] | null) {
   if(!data?.length) return 0;
   const valid = data.filter(d => d.understood_outcomes !== null);
   if(!valid.length) return 0;
