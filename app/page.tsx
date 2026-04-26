@@ -8,13 +8,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const colors = {
+  berkeleyBlue: '#002B56',
+  springGreen: '#05F283',
+  iris: '#5648B7',
+  electricBlue: '#27DEF2',
+  tomato: '#FF5347',
+  gold: '#FBD437'
+};
+
 export default async function Dashboard(props: {
-  searchParams: Promise<{ 
-    program?: string; 
-    tab?: string; 
-    year?: string; 
-    quarter?: string; 
-  }>;
+  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; }>;
 }) {
   const params = await props.searchParams;
   const program = params.program || 'AiCE';
@@ -22,16 +26,12 @@ export default async function Dashboard(props: {
   const year = params.year || '2026';
   const quarter = params.quarter || 'Q1';
 
-  // 1. Time Filtering Logic (Framework Milestone Alignment)
   const quarterMap: Record<string, { start: string; end: string }> = {
-    Q1: { start: '01-01', end: '04-30' },
-    Q2: { start: '05-01', end: '08-31' },
-    Q3: { start: '09-01', end: '12-31' },
+    Q1: { start: '01-01', end: '04-30' }, Q2: { start: '05-01', end: '08-31' }, Q3: { start: '09-01', end: '12-31' },
   };
   const startDate = `${year}-${quarterMap[quarter].start}T00:00:00Z`;
   const endDate = `${year}-${quarterMap[quarter].end}T23:59:59Z`;
 
-  // 2. Data Fetching Strategy (Table & Event Type Filtering)
   const tableMap: Record<string, string> = {
     onboarding: 'survey_onboarding',
     community: 'survey_events',
@@ -39,170 +39,129 @@ export default async function Dashboard(props: {
     eop: 'survey_eop',
   };
 
-  let query = supabase
-    .from(tableMap[activeTab])
-    .select('*')
-    .eq('program', program)
-    .gte('created_at', startDate)
-    .lte('created_at', endDate);
-
-  // Separate Community from Support Webinars [cite: 119, 135]
+  let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Technical Mentorship');
 
-  const { data: entries, error } = await query.order('created_at', { ascending: false });
-
-  // 3. Metric Calculations
+  const { data: entries, error } = await query;
   const total = entries?.length || 0;
-  
-  const getCsat = () => {
-    if (!entries || total === 0) return 0;
-    const col = {
-      onboarding: 'sat_next_steps',
-      community: 'session_quality_csat',
-      support: 'session_quality_csat',
-      eop: 'overall_sat'
-    }[activeTab];
-    const highScores = entries.filter(e => e[col!] >= 4).length;
-    return ((highScores / total) * 100).toFixed(1);
-  };
 
-  const nps = (() => {
-    if (activeTab !== 'eop' || !entries || total === 0) return null;
-    const promoters = entries.filter(e => e.nps_score >= 9).length;
-    const detractors = entries.filter(e => e.nps_score <= 6).length;
-    const pPct = (promoters / total) * 100;
-    const dPct = (detractors / total) * 100;
-    return { 
-      score: (pPct - dPct).toFixed(0),
-      p: pPct.toFixed(0),
-      ps: ((entries.filter(e => e.nps_score === 7 || e.nps_score === 8).length / total) * 100).toFixed(0),
-      d: dPct.toFixed(0)
-    };
-  })();
+  // CSAT Mapping [cite: 128, 140, 292-297]
+  const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
+  const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
 
   return (
-    <div className="flex min-h-screen bg-[#050505] text-zinc-100 font-sans" style={{ fontFamily: "'Poppins', sans-serif" }}>
-      {/* SIDEBAR */}
-      <aside className="w-64 border-r border-zinc-900 p-8 flex flex-col gap-10 bg-black">
-        <div className="space-y-1">
-          <h1 className="font-black text-xl tracking-tighter text-white">FEEDBACK ANALYSIS</h1>
-          <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">Architectural View</p>
+    <div className="flex min-h-screen text-zinc-900" style={{ fontFamily: 'serif', backgroundColor: '#F8FAFC' }}>
+      
+      {/* SIDEBAR: BERKELEY BLUE */}
+      <aside className="w-72 p-10 flex flex-col gap-12 text-white" style={{ backgroundColor: colors.berkeleyBlue }}>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-2">STRATEGIC ANALYSIS</h1>
+          <div className="h-1 w-12" style={{ backgroundColor: colors.springGreen }} />
         </div>
         
-        <nav className="flex flex-col gap-2">
+        <nav className="flex flex-col gap-3">
           {['AiCE', 'VA', 'SE', 'Data Analytics', 'Cyber Security'].map(p => (
             <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}`} 
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${program === p ? 'bg-zinc-100 text-black' : 'text-zinc-500 hover:text-white hover:bg-zinc-900'}`}>
-              {p}
+              className={`px-5 py-3 rounded-lg text-sm font-bold transition-all ${program === p ? 'bg-white/10 border-l-4 border-springGreen' : 'text-zinc-400 hover:text-white'}`}
+              style={{ borderColor: program === p ? colors.springGreen : 'transparent' }}>
+              {p.toUpperCase()}
             </Link>
           ))}
         </nav>
       </aside>
 
-      {/* MAIN DASHBOARD */}
-      <main className="flex-1 p-12 overflow-y-auto">
-        <header className="flex justify-between items-center mb-12">
+      <main className="flex-1 p-16 overflow-y-auto">
+        <header className="flex justify-between items-end mb-16 border-b pb-8 border-zinc-200">
           <div>
-            <h2 className="text-3xl font-black text-white">{program} <span className="text-zinc-800 mx-2">/</span> {activeTab.replace(/([A-Z])/g, ' $1')}</h2>
-            <p className="text-zinc-500 text-sm mt-1">Milestone Analysis: {quarter} {year}</p>
+            <h2 className="text-5xl font-black mb-2" style={{ color: colors.berkeleyBlue }}>{program.toUpperCase()} / {activeTab.toUpperCase().replace(/_/g, ' ')}</h2>
+            <p className="text-zinc-500 text-lg italic">Framework V2.0 Performance Metrics [cite: 173-175]</p>
           </div>
           
-          <div className="flex gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
+          <div className="flex gap-2 p-1 rounded-xl bg-zinc-200">
             {['Q1', 'Q2', 'Q3'].map(q => (
               <Link key={q} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${q}`}
-                className={`px-5 py-2 rounded-lg text-[10px] font-black transition-all ${quarter === q ? 'bg-zinc-100 text-black' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}>
                 {q}
               </Link>
             ))}
           </div>
         </header>
 
-        {/* TABS */}
-        <div className="flex gap-8 border-b border-zinc-900 mb-12">
+        {/* NAVIGATION TABS */}
+        <div className="flex gap-12 mb-16">
           {[
-            { id: 'onboarding', label: 'Onboarding' },
-            { id: 'community', label: 'Community Events' },
-            { id: 'support', label: 'Learner Support Webinars' },
-            { id: 'eop', label: 'End of Program' }
+            { id: 'onboarding', label: 'ONBOARDING' },
+            { id: 'community', label: 'COMMUNITY EVENTS' },
+            { id: 'support', label: 'LEARNER SUPPORT WEBINARS' },
+            { id: 'eop', label: 'END OF PROGRAM' }
           ].map(t => (
             <Link key={t.id} href={`/?program=${program}&tab=${t.id}&year=${year}&quarter=${quarter}`}
-              className={`pb-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === t.id ? 'border-white text-white' : 'border-transparent text-zinc-600 hover:text-zinc-400'}`}>
+              className={`pb-4 text-sm font-black tracking-widest transition-all border-b-4 ${activeTab === t.id ? 'text-iris border-iris' : 'text-zinc-400 border-transparent hover:text-zinc-600'}`}
+              style={{ color: activeTab === t.id ? colors.iris : '', borderColor: activeTab === t.id ? colors.iris : '' }}>
               {t.label}
             </Link>
           ))}
         </div>
 
-        {/* METRICS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <Card label="Total Respondents" value={total} />
-          <Card label="CSAT %" value={`${getCsat()}%`} color={Number(getCsat()) < 75 ? 'text-orange-500' : 'text-green-500'} />
-          
-          {activeTab === 'eop' && nps && (
-            <>
-              <Card label="NPS Score" value={nps.score} color="text-blue-500" />
-              <div className="bg-zinc-900/20 p-6 rounded-3xl border border-zinc-900 flex flex-col justify-center">
-                <div className="flex justify-between text-[9px] font-black uppercase mb-2">
-                  <span className="text-green-500">P: {nps.p}%</span>
-                  <span className="text-zinc-600">PAS: {nps.ps}%</span>
-                  <span className="text-red-500">D: {nps.d}%</span>
-                </div>
-                <div className="flex h-1.5 rounded-full overflow-hidden bg-zinc-800">
-                  <div style={{ width: `${nps.p}%` }} className="bg-green-500" />
-                  <div style={{ width: `${nps.ps}%` }} className="bg-zinc-700" />
-                  <div style={{ width: `${nps.d}%` }} className="bg-red-500" />
-                </div>
-              </div>
-            </>
+        {/* PRIMARY SCORE CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
+          <StatCard label="Total Respondents" value={total} />
+          <StatCard label="CSAT (4-5 Rating)" value={`${csatVal}%`} accent={colors.springGreen} />
+          {activeTab === 'eop' && (
+            <StatCard label="NPS Score" value={calcNPS(entries).score} accent={colors.electricBlue} />
           )}
         </div>
 
-        {/* ANALYSIS SECTION */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <section className="lg:col-span-2 bg-zinc-900/10 border border-zinc-900 rounded-3xl p-8">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Qualitative Themes (Word Cloud)</h3>
-              <span className="text-[10px] bg-zinc-900 px-3 py-1 rounded-full text-zinc-500">AI-Powered Analysis</span>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
+          
+          {/* COLUMN 1 & 2: PILLAR PERFORMANCE [cite: 26, 33, 42, 73, 86] */}
+          <section className="lg:col-span-2 bg-white p-10 rounded-3xl shadow-sm border border-zinc-100">
+            <h3 className="text-xl font-bold mb-10 border-b pb-4" style={{ color: colors.berkeleyBlue }}>STRATEGIC PILLAR PERFORMANCE</h3>
             
-            {/* WORD CLOUD PLACEHOLDER */}
-            <div className="relative h-64 w-full bg-zinc-950/50 rounded-2xl flex items-center justify-center overflow-hidden border border-zinc-900/50">
-              <div className="flex flex-wrap gap-4 p-10 justify-center items-center opacity-80">
-                <span className="text-4xl font-black text-white">LMS</span>
-                <span className="text-2xl font-bold text-zinc-600">Navigation</span>
-                <span className="text-5xl font-black text-blue-500">Support</span>
-                <span className="text-xl font-medium text-zinc-500">Chidi AI</span>
-                <span className="text-3xl font-black text-zinc-100">Mentors</span>
-                <span className="text-lg font-bold text-orange-500">Ghosting</span>
-                <span className="text-2xl font-black text-green-500">Engagement</span>
-                <span className="text-sm font-bold text-zinc-700">Webhooks</span>
-                <span className="text-4xl font-black text-zinc-400">Content</span>
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+              {activeTab === 'onboarding' && (
+                <>
+                  <Metric label="Onboarding Satisfaction" val={calc(entries, 'sat_next_steps')} />
+                  <Metric label="Platform Bug Awareness" val={calc(entries, 'help_platform_bugs')} />
+                  <Metric label="Support Tool Clarity" val={calc(entries, 'access_support_tools')} />
+                  <Metric label="Tech Mentor Access" val={calc(entries, 'access_tech_mentors')} />
+                  <Metric label="Expectation Clarity" val={calc(entries, 'clear_expectations')} />
+                </>
+              )}
+              {activeTab === 'eop' && (
+                <>
+                  <Metric label="Experience (Section 1)" val={calc(entries, 'overall_sat')} />
+                  <Metric label="Program Support (Section 2)" val={avg(entries, ['supp_lea', 'supp_chidi', 'supp_mentors'])} />
+                  <Metric label="Community (Section 3)" val={calc(entries, 'supp_events')} />
+                  <Metric label="Comms (Section 4)" val={avg(entries, ['comm_email_clarity', 'comm_frequency'])} />
+                  <Metric label="Impact (Section 5)" val={calc(entries, 'career_impact')} />
+                </>
+              )}
             </div>
+
+            {/* DEMOGRAPHICS SECTION (EOP ONLY)  */}
+            {activeTab === 'eop' && (
+              <div className="mt-16 pt-10 border-t border-zinc-100">
+                <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-8">Section 6: Demographics Analysis</h3>
+                <div className="grid grid-cols-2 gap-12">
+                   <DemoBar label="Employed Full-Time" pct={pct(entries, 'employment_status', 'Employed full-time')} />
+                   <DemoBar label="Age Group: 18-24" pct={pct(entries, 'age_group', '18-24')} />
+                </div>
+              </div>
+            )}
           </section>
 
-          {/* INTELLIGENCE SIDEBAR */}
-          <aside className="space-y-6">
-            <div className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-8">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500 mb-8">Pillar Intelligence</h3>
-              <div className="space-y-6">
-                {activeTab === 'onboarding' ? (
-                  <>
-                    <Pillar label="Platform Readiness" score={calc(entries, 'access_support_tools')} />
-                    <Pillar label="Comms Clarity" score={calc(entries, 'comms_useful')} />
-                    <Pillar label="Mentor Awareness" score={calc(entries, 'access_tech_mentors')} />
-                  </>
-                ) : activeTab === 'eop' ? (
-                  <>
-                    <Pillar label="LEA Utility" score={calc(entries, 'supp_lea')} />
-                    <Pillar label="Community Value" score={calc(entries, 'supp_events')} />
-                    <Pillar label="Career Growth" score={calc(entries, 'career_impact')} />
-                  </>
-                ) : (
-                  <p className="text-zinc-600 text-[10px] italic font-bold">Metrics based on {activeTab} CSAT inputs.</p>
-                )}
-              </div>
+          {/* COLUMN 3: QUALITATIVE WORD CLOUD */}
+          <aside className="bg-white p-10 rounded-3xl shadow-sm border border-zinc-100 h-fit">
+            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-8">Thematic Analysis</h3>
+            <div className="flex flex-wrap gap-4 items-center justify-center opacity-70 italic text-zinc-800">
+               <span className="text-3xl font-bold" style={{ color: colors.berkeleyBlue }}>SAVANNA</span>
+               <span className="text-xl">Navigation</span>
+               <span className="text-4xl font-black" style={{ color: colors.iris }}>SUPPORT</span>
+               <span className="text-2xl" style={{ color: colors.tomato }}>GHOSTING</span>
+               <span className="text-3xl font-bold">CAREER</span>
+               <span className="text-lg">Circle</span>
             </div>
           </aside>
         </div>
@@ -212,32 +171,64 @@ export default async function Dashboard(props: {
 }
 
 // HELPERS
-function Card({ label, value, color = "text-white" }: { label: string, value: any, color?: string }) {
+function StatCard({ label, value, accent = '#E2E8F0' }: any) {
   return (
-    <div className="bg-zinc-900/20 p-8 rounded-3xl border border-zinc-900">
-      <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-3">{label}</p>
-      <h4 className={`text-4xl font-black ${color}`}>{value}</h4>
+    <div className="bg-white p-10 rounded-3xl shadow-sm border-t-8" style={{ borderColor: accent }}>
+      <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400 mb-4">{label}</p>
+      <h4 className="text-4xl font-bold" style={{ color: colors.berkeleyBlue }}>{value}</h4>
     </div>
   );
 }
 
-function Pillar({ label, score }: { label: string, score: any }) {
-  const pct = (Number(score) / 5) * 100;
+function Metric({ label, val }: any) {
+  const width = (val / 5) * 100;
   return (
     <div>
-      <div className="flex justify-between text-[9px] uppercase font-black mb-2">
-        <span className="text-zinc-500">{label}</span>
-        <span className={Number(score) < 3.5 ? 'text-orange-500' : 'text-zinc-100'}>{score} / 5</span>
+      <div className="flex justify-between items-end mb-2">
+        <span className="text-sm font-bold text-zinc-600">{label}</span>
+        <span className="text-xs font-black">{val} / 5</span>
       </div>
-      <div className="h-1 bg-zinc-950 rounded-full overflow-hidden">
-        <div style={{ width: `${pct}%` }} className={`h-full ${Number(score) < 3.5 ? 'bg-orange-500' : 'bg-blue-600'}`} />
+      <div className="h-2 bg-zinc-100 rounded-full">
+        <div style={{ width: `${width}%`, backgroundColor: val < 3.5 ? colors.tomato : colors.iris }} className="h-full rounded-full transition-all" />
+      </div>
+    </div>
+  );
+}
+
+function DemoBar({ label, pct }: any) {
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between text-xs font-bold uppercase">
+        <span>{label}</span>
+        <span style={{ color: colors.blueNCS }}>{pct}%</span>
+      </div>
+      <div className="h-1.5 w-full bg-zinc-100 rounded-full">
+        <div style={{ width: `${pct}%`, backgroundColor: colors.blueNCS }} className="h-full rounded-full" />
       </div>
     </div>
   );
 }
 
 function calc(data: any[] | null, col: string) {
-  if (!data || data.length === 0) return 0;
-  const valid = data.filter(d => d[col] !== null);
-  return (valid.reduce((acc, curr) => acc + curr[col], 0) / (valid.length || 1)).toFixed(1);
+  if (!data?.length) return 0;
+  return (data.reduce((a, c) => a + (c[col] || 0), 0) / data.length).toFixed(1);
+}
+
+function avg(data: any[] | null, cols: string[]) {
+  if (!data?.length) return 0;
+  let sum = 0;
+  cols.forEach(c => sum += data.reduce((a, curr) => a + (curr[c] || 0), 0));
+  return (sum / (data.length * cols.length)).toFixed(1);
+}
+
+function pct(data: any[] | null, col: string, val: string) {
+  if (!data?.length) return 0;
+  return ((data.filter(d => d[col] === val).length / data.length) * 100).toFixed(0);
+}
+
+function calcNPS(data: any[] | null) {
+  if (!data?.length) return { score: 0 };
+  const p = data.filter(e => e.nps_score >= 9).length;
+  const d = data.filter(e => e.nps_score <= 6).length;
+  return { score: (((p / data.length) * 100) - ((d / data.length) * 100)).toFixed(0) };
 }
