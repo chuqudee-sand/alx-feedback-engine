@@ -33,7 +33,7 @@ export default async function Dashboard(props: {
   const year = params.year || '2026';
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
-  const tab = '->';
+  const tab = ' -> ';
 
   // 3. TIME-SERIES LOGIC
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
