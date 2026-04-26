@@ -33,7 +33,6 @@ export default async function Dashboard(props: {
   const year = params.year || '2026';
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
-  const tab = ' -> ';
 
   // 3. TIME-SERIES LOGIC
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
@@ -67,6 +66,7 @@ export default async function Dashboard(props: {
     eop: 'survey_eop',
   };
 
+  // Fetch quantitative survey data
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Technical Mentorship');
@@ -74,6 +74,16 @@ export default async function Dashboard(props: {
   const { data: entries, error } = await query;
   const total = entries?.length || 0;
 
+  // Fetch AI Thematic Summaries for this specific tab and program
+  const { data: aiSummaries } = await supabase
+    .from('ai_thematic_summaries')
+    .select('*')
+    .eq('program', program)
+    .eq('tab_name', activeTab)
+    .order('created_at', { ascending: false })
+    .limit(5); // Show top 5 themes
+
+  // 5. CSAT AGGREGATION LOGIC
   const csatCol = { 
     onboarding: 'sat_next_steps', 
     community: 'session_quality_csat', 
@@ -108,7 +118,7 @@ export default async function Dashboard(props: {
       <main className="flex-1 p-10 overflow-y-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b border-white/20 pb-6">
           <div className="mb-6 md:mb-0">
-            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} {tab} {activeTab.replace(/_/g, ' ')}</h2>
+            <h2 className="text-5xl font-black mb-2 uppercase tracking-tight text-white">{program} / {activeTab.replace(/_/g, ' ')}</h2>
             <p className="text-zinc-300 text-lg italic font-medium">Strategic Feedback Collection Dashboard</p>
           </div>
           
@@ -186,7 +196,7 @@ export default async function Dashboard(props: {
           )}
         </div>
 
-        {/* ROW 1: METRICS & DEMOS */}
+        {/* ROW 1: METRICS & AI INSIGHTS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-10">
           <section className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-white/10">
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>PILLAR METRICS (AVERAGES)</h3>
@@ -229,24 +239,38 @@ export default async function Dashboard(props: {
             )}
           </section>
 
-          {/* THEMATIC WORD CLOUD */}
-          <aside className="bg-white p-8 rounded-3xl shadow-xl h-fit text-center hover:scale-105 transition-transform duration-300">
-            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-8">THEMATIC WORD CLOUD</h3>
-            <div className="flex flex-wrap gap-4 items-center justify-center italic opacity-90 leading-relaxed">
-               <span className="text-4xl font-black" style={{ color: colors.berkeleyBlue }}>SAVANNA</span>
-               <span className="text-lg text-zinc-400">Navigation</span>
-               <span className="text-5xl font-black" style={{ color: colors.iris }}>SUPPORT</span>
-               <span className="text-2xl font-bold" style={{ color: colors.tomato }}>GHOSTING</span>
-               <span className="text-3xl font-black" style={{ color: colors.electricBlue }}>IMPACT</span>
-               <span className="text-xl font-bold" style={{ color: colors.gold }}>CIRCLE</span>
-               <span className="text-2xl font-black text-zinc-800">MENTORS</span>
+          {/* AI THEMATIC FEED REPLACES WORD CLOUD */}
+          <aside className="bg-white p-8 rounded-3xl shadow-xl border-t-8 h-fit hover:scale-[1.01] transition-transform duration-300" style={{ borderColor: colors.iris }}>
+            <div className="flex justify-between items-center mb-8 border-b border-zinc-100 pb-4">
+              <h3 className="text-xs font-black uppercase tracking-widest" style={{ color: colors.berkeleyBlue }}>AI THEMATIC SUMMARY</h3>
+              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md" style={{ color: colors.iris, backgroundColor: `${colors.iris}15` }}>Latest Insights</span>
+            </div>
+            
+            <div className="space-y-8">
+              {aiSummaries && aiSummaries.length > 0 ? (
+                aiSummaries.map((summary) => (
+                  <div key={summary.id} className="border-l-4 pl-4 py-1" style={{ borderColor: colors.electricBlue }}>
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                      <h4 className="text-sm font-black uppercase tracking-tight leading-tight" style={{ color: colors.berkeleyBlue }}>{summary.theme_title}</h4>
+                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full whitespace-nowrap">{summary.response_count} Mentions</span>
+                    </div>
+                    <p className="text-xs text-zinc-600 leading-relaxed italic">
+                      "{summary.summary_text}"
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center p-8 bg-zinc-50 rounded-2xl border border-zinc-100">
+                  <p className="text-xs text-zinc-400 font-bold italic">No AI summaries generated for this tab yet.</p>
+                </div>
+              )}
             </div>
           </aside>
         </div>
 
-        {/* NEW ROW: TOP-BOX INTELLIGENCE CONTAINER */}
+        {/* TOP-BOX INTELLIGENCE CONTAINER */}
         {(activeTab === 'onboarding' || activeTab === 'eop') && (
-          <section className="bg-white p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ borderColor: colors.iris }}>
+          <section className="bg-white p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ borderColor: colors.turquoise }}>
             <h3 className="text-2xl font-black mb-2 uppercase tracking-tight" style={{ color: colors.berkeleyBlue }}>ACTIONABLE INTELLIGENCE (TOP-BOX SCORING)</h3>
             <p className="text-zinc-500 text-sm italic mb-8">Percentage of respondents scoring 4 or 5. Extracted directly from Framework metrics.</p>
             
@@ -315,9 +339,7 @@ function Metric({ label, val }: any) {
   );
 }
 
-// NEW: TOP-BOX INSIGHT ROW COMPONENT
 function InsightRow({ pct, text }: { pct: number, text: string }) {
-  // Color coding the intelligence metric
   let pctColor = colors.tomato;
   if (pct >= 80) pctColor = colors.springGreen;
   else if (pct >= 60) pctColor = colors.blueNCS;
@@ -376,13 +398,12 @@ function calc(data: any[] | null, col: string) {
   return (valid.reduce((a, c) => a + (c[col] || 0), 0) / (valid.length || 1)).toFixed(1);
 }
 
-// NEW: CALC TOP BOX FUNCTION
 function calcTopBox(data: any[] | null, col: string) {
   if (!data?.length) return 0;
-  const valid = data.filter(d => d[col] !== null); // Remove blanks
+  const valid = data.filter(d => d[col] !== null); 
   if (valid.length === 0) return 0;
   
-  const topBoxCount = valid.filter(d => d[col] >= 4).length; // Count 4s and 5s
+  const topBoxCount = valid.filter(d => d[col] >= 4).length; 
   return Math.round((topBoxCount / valid.length) * 100);
 }
 
