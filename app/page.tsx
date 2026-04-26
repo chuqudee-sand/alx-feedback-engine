@@ -123,7 +123,12 @@ export default async function Dashboard(props: {
         
         {/* LOGO WATERMARK LAYER */}
         <div className="fixed inset-0 z-0 pointer-events-none flex justify-center items-center" style={{ opacity: isDark ? 0.03 : 0.04 }}>
-            <img src="/alx-logo-transparent.png" alt="ALX Logo" className="w-[40%] object-contain mix-blend-luminosity" />
+            <img 
+              src={isDark ? "/alx-logo-transparent.png" : "/alx-logo-black.png"} 
+              alt="ALX Logo" 
+              className="w-[40%] object-contain" 
+              style={{ mixBlendMode: isDark ? 'luminosity' : 'multiply' }}
+            />
         </div>
 
         {/* CONTENT LAYER */}
