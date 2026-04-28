@@ -86,7 +86,7 @@ export default async function Dashboard(props: {
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
   
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
-  if (activeTab === 'support') query = query.eq('event_type', 'Program Team'); // Replaced Technical Mentorship
+  if (activeTab === 'support') query = query.eq('event_type', 'Program Team'); 
 
   // Event Filter Logic
   if ((activeTab === 'community' || activeTab === 'support') && selectedEvent !== 'All') {
@@ -96,7 +96,7 @@ export default async function Dashboard(props: {
   const { data: entries } = await query;
   const total = entries?.length || 0;
 
-  // Extract unique events for the frontend dropdown
+  // Extract unique events for the frontend dropdown (Naturally isolated by active tab)
   let uniqueEvents: string[] = [];
   if (activeTab === 'community' || activeTab === 'support') {
     const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
@@ -160,7 +160,6 @@ export default async function Dashboard(props: {
         
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
-            {/* UPDATED TITLE RENDERING */}
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3" style={{ color: t.textMain }}>
               <span className="uppercase">{program}</span> 
               <span className="text-zinc-500 font-medium text-3xl"> &rarr; </span> 
@@ -197,57 +196,24 @@ export default async function Dashboard(props: {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
-              
-              {/* SERVER-SAFE HOVER DROPDOWN FILTER */}
-              {(activeTab === 'community' || activeTab === 'support') && uniqueEvents.length > 0 && (
-                <div className="relative group z-50">
-                  <div className="appearance-none outline-none text-[10px] font-bold px-3 py-2 rounded-lg border cursor-pointer shadow-sm flex items-center gap-2 transition-all hover:scale-[1.02]"
-                    style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
-                    {selectedEvent === 'All' ? 'ALL EVENTS' : selectedEvent.length > 25 ? selectedEvent.substring(0, 25) + '...' : selectedEvent}
-                    <span className="text-[8px] opacity-50">▼</span>
-                  </div>
-                  
-                  {/* Dropdown Menu (Appears on Hover) */}
-                  <div className="absolute top-full right-0 mt-2 hidden group-hover:flex flex-col border rounded-xl shadow-2xl max-h-64 overflow-y-auto whitespace-nowrap min-w-[200px]"
-                    style={{ backgroundColor: isDark ? colors.sidebarNavy : colors.white, borderColor: t.cardBorder }}>
-                    
-                    <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=All`}
-                      className="px-4 py-3 text-[10px] font-black border-b transition-colors hover:bg-zinc-100/10"
-                      style={{ color: selectedEvent === 'All' ? colors.springGreen : t.textMain, borderColor: t.cardBorder }}>
-                      ALL EVENTS
-                    </Link>
-                    
-                    {uniqueEvents.map(ev => (
-                      <Link key={ev} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=${encodeURIComponent(ev)}`}
-                        className="px-4 py-3 text-[10px] font-bold border-b last:border-0 transition-colors hover:bg-zinc-100/10"
-                        style={{ color: selectedEvent === ev ? colors.springGreen : t.textMuted, borderColor: t.cardBorder }}>
-                        {ev}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
-                <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
-                  style={{ backgroundColor: month === 'All' ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>
-                  FULL {quarter}
+            <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
+              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
+                style={{ backgroundColor: month === 'All' ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>
+                FULL {quarter}
+              </Link>
+              {quarterMonths[quarter].map(m => (
+                <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
+                  style={{ backgroundColor: month === m.val ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>
+                  {m.name.toUpperCase()}
                 </Link>
-                {quarterMonths[quarter].map(m => (
-                  <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
-                    style={{ backgroundColor: month === m.val ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>
-                    {m.name.toUpperCase()}
-                  </Link>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         </header>
 
-        <div className="flex gap-10 mb-10 overflow-x-auto">
+        <div className="flex gap-10 mb-8 overflow-x-auto">
           {[
             { id: 'onboarding', label: 'ONBOARDING' },
             { id: 'community', label: 'COMMUNITY EVENTS' },
@@ -262,6 +228,41 @@ export default async function Dashboard(props: {
           ))}
         </div>
 
+        {/* CLICKABLE DROPDOWN FILTER - MOVED DIRECTLY ABOVE SCORECARDS */}
+        {(activeTab === 'community' || activeTab === 'support') && uniqueEvents.length > 0 && (
+          <div className="mb-4 relative z-40 flex items-center gap-3">
+            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: t.textMuted }}>Filter by Event:</span>
+            
+            <details className="group relative inline-block">
+              <summary className="list-none outline-none text-[10px] font-bold px-4 py-2 rounded-lg border cursor-pointer shadow-sm flex items-center transition-all hover:scale-[1.02]"
+                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
+                {selectedEvent === 'All' ? 'ALL EVENTS' : selectedEvent.length > 40 ? selectedEvent.substring(0, 40) + '...' : selectedEvent}
+                <span className="text-[8px] opacity-50 ml-3">▼</span>
+              </summary>
+              
+              <div className="absolute top-full left-0 mt-2 flex flex-col border rounded-xl shadow-2xl max-h-64 overflow-y-auto whitespace-nowrap min-w-[280px] z-50"
+                style={{ backgroundColor: isDark ? colors.sidebarNavy : colors.white, borderColor: t.cardBorder }}>
+                <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=All`}
+                  className="px-4 py-3 text-[10px] font-black border-b transition-colors hover:bg-zinc-100/10"
+                  style={{ color: selectedEvent === 'All' ? colors.springGreen : t.textMain, borderColor: t.cardBorder }}>
+                  ALL EVENTS
+                </Link>
+                
+                {uniqueEvents.map(ev => (
+                  <Link key={ev} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=${encodeURIComponent(ev)}`}
+                    className="px-4 py-3 text-[10px] font-bold border-b last:border-0 transition-colors hover:bg-zinc-100/10"
+                    style={{ color: selectedEvent === ev ? colors.springGreen : t.textMuted, borderColor: t.cardBorder }}>
+                    {ev}
+                  </Link>
+                ))}
+              </div>
+            </details>
+            {/* Custom CSS to hide the default browser summary arrow */}
+            <style dangerouslySetInnerHTML={{__html: `details > summary::-webkit-details-marker { display: none; }`}} />
+          </div>
+        )}
+
+        {/* SCORECARDS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <StatCard label={(activeTab === 'community' || activeTab === 'support') ? "TOTAL ATTENDEES" : "TOTAL RESPONDENTS"} value={total} accent={colors.iris} isDark={isDark} t={t} />
           
@@ -512,7 +513,7 @@ function DemographicChart({ data, column, title, colorsArr, isDark, t }: any) {
 function calc(data: any[] | null, col: string) {
   if (!data?.length) return 0;
   const valid = data.filter(d => d[col] !== null);
-  return (valid.reduce((a, c) => a + (c[col] || 0), 0) / (valid.length || 1)).toFixed(1);
+  return valid.length ? (valid.reduce((a, c) => a + (c[col] || 0), 0) / valid.length).toFixed(1) : "0";
 }
 
 function calcTopBox(data: any[] | null, col: string) {
