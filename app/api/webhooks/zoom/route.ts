@@ -12,7 +12,7 @@ const PROGRAM_EMAILS: Record<string, string> = {
 };
 
 const EXCLUDED_MEETING_KEYWORDS = /dry run|check-in|check-out|sync/i;
-const COMMUNITY_KEYWORDS = /fire side chat|karibu|tambali|ama|ask me anything/i;
+const COMMUNITY_KEYWORDS = /fire side chat|karibu|tambali|speaker|ama|ask me anything/i;
 const SUPPORT_KEYWORDS = /project|office hour|assignment|clinic/i;
 
 export async function POST(request: Request) {
