@@ -32,7 +32,7 @@ export default async function Dashboard(props: {
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
   const theme = params.theme || 'light';
-  const selectedEvent = params.event || 'All';
+  const selectedEvent = params.event || 'All'; // We will override this 'All' below
   
   const isDark = theme === 'dark';
 
@@ -45,7 +45,6 @@ export default async function Dashboard(props: {
     textMuted: isDark ? '#94A3B8' : '#64748B',
   };
 
-  // Title formatting map
   const tabDisplayMap: Record<string, string> = {
     onboarding: 'Onboarding',
     community: 'Community Events',
@@ -83,34 +82,47 @@ export default async function Dashboard(props: {
     eop: 'survey_eop',
   };
 
+  // 1. First, fetch unique events and find the latest one
+  let uniqueEvents: string[] = [];
+  let latestEvent = '';
+
+  if (activeTab === 'community' || activeTab === 'support') {
+    const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
+    const allEventsQuery = await supabase.from(tableMap[activeTab])
+      .select('event_name_date, created_at')
+      .eq('program', program)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
+      .eq('event_type', eventTypeStr)
+      .order('created_at', { ascending: false }); // Sort newest first
+      
+    if (allEventsQuery.data) {
+      const seen = new Set();
+      for (const item of allEventsQuery.data) {
+        if (item.event_name_date && !seen.has(item.event_name_date)) {
+          seen.add(item.event_name_date);
+          uniqueEvents.push(item.event_name_date);
+        }
+      }
+      if (uniqueEvents.length > 0) {
+        latestEvent = uniqueEvents[0];
+      }
+    }
+  }
+
+  // 2. Establish what the active event actually is (Default to newest if empty or 'All')
+  const activeEvent = (selectedEvent === 'All' && latestEvent) ? latestEvent : selectedEvent;
+
+  // 3. Build the main query using the active event
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
-  
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Program Team'); 
-
-  // Event Filter Logic
-  if ((activeTab === 'community' || activeTab === 'support') && selectedEvent !== 'All') {
-    query = query.eq('event_name_date', selectedEvent);
+  if ((activeTab === 'community' || activeTab === 'support') && activeEvent && activeEvent !== 'All') {
+    query = query.eq('event_name_date', activeEvent);
   }
 
   const { data: entries } = await query;
   const total = entries?.length || 0;
-
-  // Extract unique events for the frontend dropdown (Naturally isolated by active tab)
-  let uniqueEvents: string[] = [];
-  if (activeTab === 'community' || activeTab === 'support') {
-    const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
-    const allEventsQuery = await supabase.from(tableMap[activeTab])
-      .select('event_name_date')
-      .eq('program', program)
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .eq('event_type', eventTypeStr);
-      
-    if (allEventsQuery.data) {
-      uniqueEvents = Array.from(new Set(allEventsQuery.data.map(e => e.event_name_date).filter(Boolean)));
-    }
-  }
 
   const { data: aiSummaries } = await supabase
     .from('ai_thematic_summaries')
@@ -170,7 +182,7 @@ export default async function Dashboard(props: {
           
           <div className="flex flex-col items-end gap-3">
             <div className="flex gap-2 items-center">
-              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${isDark ? 'light' : 'dark'}&event=${selectedEvent}`}
+              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${isDark ? 'light' : 'dark'}&event=${encodeURIComponent(activeEvent)}`}
                 className="px-4 py-2 rounded-lg text-[10px] font-black transition-all shadow-sm border mr-2 flex items-center gap-2"
                 style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
                 {isDark ? '☀️ LIGHT MODE' : '🌙 DARK MODE'}
@@ -228,37 +240,39 @@ export default async function Dashboard(props: {
           ))}
         </div>
 
-        {/* CLICKABLE DROPDOWN FILTER - MOVED DIRECTLY ABOVE SCORECARDS */}
+        {/* CLICKABLE DROPDOWN FILTER (Pure CSS Checkbox Hack) */}
         {(activeTab === 'community' || activeTab === 'support') && uniqueEvents.length > 0 && (
           <div className="mb-4 relative z-40 flex items-center gap-3">
             <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: t.textMuted }}>Filter by Event:</span>
             
-            <details className="group relative inline-block">
-              <summary className="list-none outline-none text-[10px] font-bold px-4 py-2 rounded-lg border cursor-pointer shadow-sm flex items-center transition-all hover:scale-[1.02]"
-                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
-                {selectedEvent === 'All' ? 'ALL EVENTS' : selectedEvent.length > 40 ? selectedEvent.substring(0, 40) + '...' : selectedEvent}
-                <span className="text-[8px] opacity-50 ml-3">▼</span>
-              </summary>
+            <div className="relative inline-block">
+              {/* Hidden Checkbox controls the menu visibility */}
+              <input type="checkbox" id="event-dropdown" className="peer hidden" />
               
-              <div className="absolute top-full left-0 mt-2 flex flex-col border rounded-xl shadow-2xl max-h-64 overflow-y-auto whitespace-nowrap min-w-[280px] z-50"
+              {/* Trigger Button */}
+              <label htmlFor="event-dropdown" className="list-none outline-none text-[10px] font-bold px-4 py-2 rounded-lg border cursor-pointer shadow-sm flex items-center transition-all hover:scale-[1.02]"
+                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
+                {activeEvent.length > 40 ? activeEvent.substring(0, 40) + '...' : activeEvent}
+                <span className="text-[8px] opacity-50 ml-3">▼</span>
+              </label>
+              
+              {/* Invisible Full-Screen Backdrop (Closes dropdown when clicked outside) */}
+              <label htmlFor="event-dropdown" className="fixed inset-0 z-40 hidden peer-checked:block bg-transparent cursor-default"></label>
+              
+              {/* Dropdown Menu List */}
+              <div className="absolute top-full left-0 mt-2 hidden peer-checked:flex flex-col border rounded-xl shadow-2xl max-h-64 overflow-y-auto whitespace-nowrap min-w-[280px] z-50"
                 style={{ backgroundColor: isDark ? colors.sidebarNavy : colors.white, borderColor: t.cardBorder }}>
-                <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=All`}
-                  className="px-4 py-3 text-[10px] font-black border-b transition-colors hover:bg-zinc-100/10"
-                  style={{ color: selectedEvent === 'All' ? colors.springGreen : t.textMain, borderColor: t.cardBorder }}>
-                  ALL EVENTS
-                </Link>
                 
+                {/* No "ALL EVENTS" Option here - Only mapped events */}
                 {uniqueEvents.map(ev => (
                   <Link key={ev} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=${encodeURIComponent(ev)}`}
                     className="px-4 py-3 text-[10px] font-bold border-b last:border-0 transition-colors hover:bg-zinc-100/10"
-                    style={{ color: selectedEvent === ev ? colors.springGreen : t.textMuted, borderColor: t.cardBorder }}>
+                    style={{ color: activeEvent === ev ? colors.springGreen : t.textMuted, borderColor: t.cardBorder }}>
                     {ev}
                   </Link>
                 ))}
               </div>
-            </details>
-            {/* Custom CSS to hide the default browser summary arrow */}
-            <style dangerouslySetInnerHTML={{__html: `details > summary::-webkit-details-marker { display: none; }`}} />
+            </div>
           </div>
         )}
 
