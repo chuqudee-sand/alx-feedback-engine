@@ -22,7 +22,7 @@ const colors = {
 };
 
 export default async function Dashboard(props: {
-  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string }>;
+  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>;
 }) {
   const params = await props.searchParams;
   
@@ -32,6 +32,7 @@ export default async function Dashboard(props: {
   const quarter = params.quarter || 'Q1';
   const month = params.month || 'All';
   const theme = params.theme || 'light';
+  const selectedEvent = params.event || 'All';
   
   const isDark = theme === 'dark';
 
@@ -84,10 +85,25 @@ export default async function Dashboard(props: {
 
   let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
-  if (activeTab === 'support') query = query.eq('event_type', 'Technical Mentorship');
+  if (activeTab === 'support') query = query.eq('event_type', 'Program Team'); // Replaced Technical Mentorship
+  
+  // Event Filter Logic
+  if ((activeTab === 'community' || activeTab === 'support') && selectedEvent !== 'All') {
+    query = query.eq('event_name_date', selectedEvent);
+  }
 
   const { data: entries } = await query;
   const total = entries?.length || 0;
+
+  // Extract unique events for the frontend dropdown
+  let uniqueEvents: string[] = [];
+  if (activeTab === 'community' || activeTab === 'support') {
+    const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
+    const allEventsQuery = await supabase.from(tableMap[activeTab]).select('event_name_date').eq('program', program).gte('created_at', startDate).lte('created_at', endDate).eq('event_type', eventTypeStr);
+    if (allEventsQuery.data) {
+      uniqueEvents = Array.from(new Set(allEventsQuery.data.map(e => e.event_name_date).filter(Boolean)));
+    }
+  }
 
   const { data: aiSummaries } = await supabase
     .from('ai_thematic_summaries')
@@ -99,6 +115,7 @@ export default async function Dashboard(props: {
 
   const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
   const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
+  const avgAttendance = activeTab === 'community' || activeTab === 'support' ? calc(entries, 'attendance_duration_mins') : "0";
 
   return (
     <div className="flex min-h-screen transition-colors duration-500 relative" style={{ fontFamily: "'Ubuntu', sans-serif", backgroundColor: t.bg, color: t.textMain }}>
@@ -136,7 +153,6 @@ export default async function Dashboard(props: {
         
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
-            {/* UPDATED TITLE RENDERING */}
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3" style={{ color: t.textMain }}>
               <span className="uppercase">{program}</span> 
               <span className="text-zinc-500 font-medium text-3xl"> &rarr; </span> 
@@ -147,7 +163,7 @@ export default async function Dashboard(props: {
           
           <div className="flex flex-col items-end gap-3">
             <div className="flex gap-2 items-center">
-              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${isDark ? 'light' : 'dark'}`}
+              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${isDark ? 'light' : 'dark'}&event=${selectedEvent}`}
                 className="px-4 py-2 rounded-lg text-[10px] font-black transition-all shadow-sm border mr-2 flex items-center gap-2"
                 style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}>
                 {isDark ? '☀️ LIGHT MODE' : '🌙 DARK MODE'}
@@ -173,19 +189,40 @@ export default async function Dashboard(props: {
               </div>
             </div>
             
-            <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
-              <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
-                style={{ backgroundColor: month === 'All' ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>
-                FULL {quarter}
-              </Link>
-              {quarterMonths[quarter].map(m => (
-                <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
-                  style={{ backgroundColor: month === m.val ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>
-                  {m.name.toUpperCase()}
+            <div className="flex items-center gap-2">
+              {/* DROPDOWN FILTER ADDED HERE */}
+              {(activeTab === 'community' || activeTab === 'support') && uniqueEvents.length > 0 && (
+                <div className="relative">
+                  <select 
+                    className="appearance-none outline-none text-[10px] font-bold px-3 py-2 pr-8 rounded-lg border cursor-pointer shadow-sm"
+                    style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.white, color: t.textMain, borderColor: t.cardBorder }}
+                    value={selectedEvent}
+                    onChange={(e) => {
+                      const url = `/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=${encodeURIComponent(e.target.value)}`;
+                      // @ts-ignore
+                      window.location.href = url;
+                    }}
+                  >
+                    <option value="All">ALL EVENTS</option>
+                    {uniqueEvents.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
+                <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
+                  style={{ backgroundColor: month === 'All' ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>
+                  FULL {quarter}
                 </Link>
-              ))}
+                {quarterMonths[quarter].map(m => (
+                  <Link key={m.val} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
+                    style={{ backgroundColor: month === m.val ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>
+                    {m.name.toUpperCase()}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </header>
@@ -206,7 +243,12 @@ export default async function Dashboard(props: {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <StatCard label="TOTAL RESPONDENTS" value={total} accent={colors.iris} isDark={isDark} t={t} />
+          <StatCard label={(activeTab === 'community' || activeTab === 'support') ? "TOTAL ATTENDEES" : "TOTAL RESPONDENTS"} value={total} accent={colors.iris} isDark={isDark} t={t} />
+          
+          {(activeTab === 'community' || activeTab === 'support') && (
+            <StatCard label="AVG ATTENDANCE (MINS)" value={avgAttendance} accent={colors.turquoise} isDark={isDark} t={t} />
+          )}
+
           <StatCard label="CSAT % (4-5 RATINGS)" value={`${csatVal}%`} accent={colors.springGreen} isDark={isDark} t={t} />
           
           {activeTab === 'support' && (
@@ -232,7 +274,6 @@ export default async function Dashboard(props: {
           )}
         </div>
 
-        {/* PILLAR METRICS WITH REVISED HEADER */}
         <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
           <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
             PILLAR METRICS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale)</span>
@@ -243,7 +284,7 @@ export default async function Dashboard(props: {
               <>
                 <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} type="sat" isDark={isDark} t={t} />
                 <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} type="agree" isDark={isDark} t={t} />
-                <Metric label="ACCESS TO TECHNICAL MENTOR" val={calc(entries, 'access_tech_mentors')} type="agree" isDark={isDark} t={t} />
+                <Metric label="ACCESS TO PROGRAM TEAM" val={calc(entries, 'access_tech_mentors')} type="agree" isDark={isDark} t={t} />
                 <Metric label="PLATFORM BUG AWARENESS" val={calc(entries, 'help_platform_bugs')} type="agree" isDark={isDark} t={t} />
                 <Metric label="SUPPORT TOOL CLARITY" val={calc(entries, 'access_support_tools')} type="agree" isDark={isDark} t={t} />
                 <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} type="help" isDark={isDark} t={t} />
@@ -255,7 +296,7 @@ export default async function Dashboard(props: {
                 <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} type="help" isDark={isDark} t={t} />
                 <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} type="agree" isDark={isDark} t={t} />
                 <Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} type="agree" isDark={isDark} t={t} />
-                <Metric label="TECH MENTOR SUPPORT" val={calc(entries, 'supp_mentors')} type="agree" isDark={isDark} t={t} />
+                <Metric label="PROGRAM TEAM SUPPORT" val={calc(entries, 'supp_mentors')} type="agree" isDark={isDark} t={t} />
                 <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} type="agree" isDark={isDark} t={t} />
                 <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} type="agree" isDark={isDark} t={t} />
                 <Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} type="agree" isDark={isDark} t={t} />
@@ -279,7 +320,6 @@ export default async function Dashboard(props: {
           )}
         </section>
 
-        {/* AI THEMATIC FEED WITH REVISED HEADER */}
         <section className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}>
           <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: t.cardBorder }}>
             <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>
@@ -308,7 +348,6 @@ export default async function Dashboard(props: {
           </div>
         </section>
 
-        {/* REVISED TOP-BOX INTELLIGENCE CONTAINER */}
         {(activeTab === 'onboarding' || activeTab === 'eop') && (
           <section className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}>
             <h3 className="text-2xl font-black mb-2 uppercase tracking-tight flex items-end gap-3" style={{ color: t.textMain }}>
@@ -321,7 +360,7 @@ export default async function Dashboard(props: {
                 <>
                   <InsightRow pct={calcTopBox(entries, 'sat_next_steps')} text="are highly satisfied with their onboarding experience and confidently know their next steps." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'clear_expectations')} text="completely understand the program's expectations and graduation requirements." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'access_tech_mentors')} text="know exactly how to access Technical Mentors for expert guidance when needed." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'access_tech_mentors')} text="know exactly how to access the Program Team for expert guidance when needed." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'help_platform_bugs')} text="know where to go to get help with platform issues and technical bugs." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'access_support_tools')} text="are clear on how to access key support tools like LEA, Chidi, and PeerFinder." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'comms_useful')} text="found emails and community communications clear and highly useful for getting started." isDark={isDark} t={t} />
@@ -333,7 +372,7 @@ export default async function Dashboard(props: {
                   <InsightRow pct={calcTopBox(entries, 'career_impact')} text="feel the program was highly effective in enhancing their skills and advancing their careers." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'supp_events')} text="say community events kept them motivated, engaged, and on track to complete the program." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'supp_peers')} text="felt well-supported and motivated by their peers throughout their learning journey." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'supp_mentors')} text="state that Technical Mentor support contributed meaningfully to their learning." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_mentors')} text="state that Program Team support contributed meaningfully to their learning." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'supp_lea')} text="found the LEA AI Assistant easily accessible and highly useful when facing challenges." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'supp_chidi')} text="relied on Chidi AI to successfully navigate and overcome learning content challenges." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'supp_prog_team')} text="received timely and helpful guidance from the Program Team communications." isDark={isDark} t={t} />
@@ -450,7 +489,7 @@ function DemographicChart({ data, column, title, colorsArr, isDark, t }: any) {
 function calc(data: any[] | null, col: string) {
   if (!data?.length) return 0;
   const valid = data.filter(d => d[col] !== null);
-  return (valid.reduce((a, c) => a + (c[col] || 0), 0) / (valid.length || 1)).toFixed(1);
+  return valid.length ? (valid.reduce((a, c) => a + (c[col] || 0), 0) / valid.length).toFixed(1) : "0";
 }
 
 function calcTopBox(data: any[] | null, col: string) {
@@ -464,9 +503,7 @@ function calcTopBox(data: any[] | null, col: string) {
 function calcOutcome(data: any[] | null) {
   if(!data?.length) return 0;
   const valid = data.filter(d => d.understood_outcomes !== null);
-  if(!valid.length) return 0;
-  const yesCount = valid.filter(d => d.understood_outcomes === true).length;
-  return ((yesCount / valid.length) * 100).toFixed(0);
+  return valid.length ? ((valid.filter(d => d.understood_outcomes === true).length / valid.length) * 100).toFixed(0) : "0";
 }
 
 function calcNPS(data: any[] | null) {
