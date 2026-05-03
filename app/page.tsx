@@ -306,7 +306,7 @@ export default async function Dashboard(props: {
           {/* Added Demographics to Onboarding for Primary Goal */}
           {activeTab === 'onboarding' && (
             <div className="mt-12 pt-8 border-t" style={{ borderColor: t.cardBorder }}>
-              <h3 className="text-xs font-black uppercase tracking-[0.1em] mb-6" style={{ color: t.textMuted }}>COHORT DEMOGRAPHICS</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.1em] mb-6" style={{ color: t.textMuted }}>DEMOGRAPHICS</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                  <DemographicChart data={entries} column="primary_goal" title="PRIMARY LEARNING GOAL" colorsArr={[colors.iris, colors.springGreen, colors.electricBlue, colors.gold]} isDark={isDark} t={t} />
               </div>
