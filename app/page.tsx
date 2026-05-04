@@ -16,7 +16,6 @@ const colors = {
 // --- SERVER ACTION: THE AI SUMMARIZATION ENGINE ---
 async function generateAISummary(formData: FormData) {
   'use server';
-  
   const program = formData.get('program') as string;
   const activeTab = formData.get('activeTab') as string;
   const startDate = formData.get('startDate') as string;
@@ -25,7 +24,6 @@ async function generateAISummary(formData: FormData) {
   const reportPeriod = formData.get('reportPeriod') as string;
 
   let rawText = "";
-  
   if (activeTab === 'onboarding' || activeTab === 'eop') {
     const table = activeTab === 'onboarding' ? 'survey_onboarding' : 'survey_eop';
     const { data } = await supabase.from(table).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
@@ -47,26 +45,19 @@ async function generateAISummary(formData: FormData) {
     }
   }
 
-  if (!rawText.trim() || rawText.length < 10) {
-    console.log("Not enough text to summarize.");
-    return;
-  }
+  if (!rawText.trim() || rawText.length < 10) return;
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
-
   const prompt = `
     You are an expert Data Analyst for an educational program. Analyze the following learner feedback.
-    Identify the 3 to 4 most prominent themes. 
-    Return the result strictly as a JSON array of objects. Do not include markdown formatting like \`\`\`json.
+    Identify the 3 to 4 most prominent themes. Return the result strictly as a JSON array of objects. Do not include markdown formatting like \`\`\`json.
     Each object must have these exactly matching keys:
     - "theme_title": A short 2-4 word title for the theme.
     - "summary_text": A 1-sentence summary of what learners are saying.
     - "response_count": Your estimated number of mentions for this theme (integer).
     - "question_short": A short category like "General Feedback" or "Improvement".
-
-    Feedback to analyze:
-    ${rawText}
+    Feedback to analyze: ${rawText}
   `;
 
   try {
@@ -75,28 +66,18 @@ async function generateAISummary(formData: FormData) {
     const parsedThemes = JSON.parse(jsonString);
 
     const insertRows = parsedThemes.map((theme: any) => ({
-      program: program,
-      tab_name: activeTab,
-      question_short: theme.question_short || 'General',
-      theme_title: theme.theme_title,
-      response_count: theme.response_count || 1,
-      summary_text: theme.summary_text,
-      report_period: reportPeriod,
-      event_name_date: activeTab === 'community' || activeTab === 'support' ? activeEvent : null
+      program: program, tab_name: activeTab, question_short: theme.question_short || 'General',
+      theme_title: theme.theme_title, response_count: theme.response_count || 1, summary_text: theme.summary_text,
+      report_period: reportPeriod, event_name_date: activeTab === 'community' || activeTab === 'support' ? activeEvent : null
     }));
 
     await supabase.from('ai_thematic_summaries').insert(insertRows);
     revalidatePath('/');
-  } catch (error) {
-    console.error("Gemini AI Error:", error);
-  }
+  } catch (error) { console.error("Gemini AI Error:", error); }
 }
 
-export default async function Dashboard(props: {
-  searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>;
-}) {
+export default async function Dashboard(props: { searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>; }) {
   const params = await props.searchParams;
-  
   const program = params.program || 'AiCE'; 
   const activeTab = params.tab || 'onboarding';
   const year = params.year || '2026';
@@ -104,16 +85,12 @@ export default async function Dashboard(props: {
   const month = params.month || 'All';
   const theme = params.theme || 'light';
   const selectedEvent = params.event || 'All';
-  
   const isDark = theme === 'dark';
 
   const t = {
-    bg: isDark ? colors.berkeleyBlue : '#e2e4e7f6',
-    sidebar: isDark ? colors.sidebarNavy : colors.berkeleyBlue,
-    cardBg: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.white,
-    cardBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
-    textMain: isDark ? colors.white : colors.berkeleyBlue,
-    textMuted: isDark ? '#94A3B8' : '#64748B',
+    bg: isDark ? colors.berkeleyBlue : '#e2e4e7f6', sidebar: isDark ? colors.sidebarNavy : colors.berkeleyBlue,
+    cardBg: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.white, cardBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
+    textMain: isDark ? colors.white : colors.berkeleyBlue, textMuted: isDark ? '#94A3B8' : '#64748B',
   };
 
   const tabDisplayMap: Record<string, string> = { onboarding: 'Onboarding', community: 'Community Events', support: 'Learner Support Webinars', eop: 'End of Program' };
@@ -126,28 +103,21 @@ export default async function Dashboard(props: {
 
   let startDate, endDate, reportPeriod;
   if (month !== 'All') {
-    startDate = `${year}-${month}-01T00:00:00Z`; endDate = `${year}-${month}-${monthEnds[month]}T23:59:59Z`;
-    reportPeriod = `${year}-${month}`;
+    startDate = `${year}-${month}-01T00:00:00Z`; endDate = `${year}-${month}-${monthEnds[month]}T23:59:59Z`; reportPeriod = `${year}-${month}`;
   } else {
     const startM = quarterMonths[quarter][0].val; const endM = quarterMonths[quarter][3].val;
-    startDate = `${year}-${startM}-01T00:00:00Z`; endDate = `${year}-${endM}-${monthEnds[endM]}T23:59:59Z`;
-    reportPeriod = `${year}-${quarter}`;
+    startDate = `${year}-${startM}-01T00:00:00Z`; endDate = `${year}-${endM}-${monthEnds[endM]}T23:59:59Z`; reportPeriod = `${year}-${quarter}`;
   }
 
   const tableMap: Record<string, string> = { onboarding: 'survey_onboarding', community: 'survey_events', support: 'survey_events', eop: 'survey_eop' };
-
-  let uniqueEvents: string[] = [];
-  let latestEvent = '';
+  let uniqueEvents: string[] = []; let latestEvent = '';
 
   if (activeTab === 'community' || activeTab === 'support') {
     const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
     const allEventsQuery = await supabase.from(tableMap[activeTab]).select('event_name_date, created_at').eq('program', program).gte('created_at', startDate).lte('created_at', endDate).eq('event_type', eventTypeStr).order('created_at', { ascending: false });
-      
     if (allEventsQuery.data) {
       const seen = new Set();
-      for (const item of allEventsQuery.data) {
-        if (item.event_name_date && !seen.has(item.event_name_date)) { seen.add(item.event_name_date); uniqueEvents.push(item.event_name_date); }
-      }
+      for (const item of allEventsQuery.data) { if (item.event_name_date && !seen.has(item.event_name_date)) { seen.add(item.event_name_date); uniqueEvents.push(item.event_name_date); } }
       if (uniqueEvents.length > 0) latestEvent = uniqueEvents[0];
     }
   }
@@ -162,13 +132,9 @@ export default async function Dashboard(props: {
   const { data: entries } = await query;
   const total = entries?.length || 0;
 
-  // AI Summaries Query
   let summaryQuery = supabase.from('ai_thematic_summaries').select('*').eq('program', program).eq('tab_name', activeTab);
-  if (activeTab === 'onboarding' || activeTab === 'eop') {
-    summaryQuery = summaryQuery.eq('report_period', reportPeriod);
-  } else {
-    summaryQuery = summaryQuery.eq('event_name_date', activeEvent);
-  }
+  if (activeTab === 'onboarding' || activeTab === 'eop') summaryQuery = summaryQuery.eq('report_period', reportPeriod);
+  else summaryQuery = summaryQuery.eq('event_name_date', activeEvent);
   const { data: aiSummaries } = await summaryQuery.order('created_at', { ascending: false }).limit(6);
 
   const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
@@ -213,7 +179,6 @@ export default async function Dashboard(props: {
                 ))}
               </div>
             </div>
-            
             <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
               <Link href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`} style={{ backgroundColor: month === 'All' ? (isDark ? 'rgba(255,255,255,0.1)' : colors.berkeleyBlue) : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>FULL {quarter}</Link>
               {quarterMonths[quarter].map(m => (
@@ -275,7 +240,6 @@ export default async function Dashboard(props: {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
             {activeTab === 'onboarding' && (
               <>
-                {/* Original Onboarding Logistics */}
                 <Metric label="ONBOARDING SATISFACTION" val={calc(entries, 'sat_next_steps')} type="sat" isDark={isDark} t={t} />
                 <Metric label="PROGRAM EXPECTATION CLARITY" val={calc(entries, 'clear_expectations')} type="agree" isDark={isDark} t={t} />
                 <Metric label="ACCESS TO PROGRAM TEAM" val={calc(entries, 'access_tech_mentors')} type="agree" isDark={isDark} t={t} />
@@ -285,16 +249,36 @@ export default async function Dashboard(props: {
                 <Metric label="PAUSE/WITHDRAW CLARITY" val={calc(entries, 'know_pause_withdraw')} type="agree" isDark={isDark} t={t} />
                 <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} type="help" isDark={isDark} t={t} />
                 
-                {/* New Skills Assessment Data */}
+                {/* DYNAMIC SKILLS ASSESSMENT BASED ON PROGRAM */}
                 <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t" style={{ borderColor: t.cardBorder }}>
-                   <h4 className="text-xs font-black uppercase tracking-[0.1em] mb-4" style={{ color: t.textMuted }}>SKILLS ASSESSMENT BASELINE</h4>
+                   <h4 className="text-xs font-black uppercase tracking-[0.1em] mb-4" style={{ color: t.textMuted }}>{program.toUpperCase()} SKILLS ASSESSMENT BASELINE</h4>
                 </div>
-                <Metric label="CAN EXPLAIN AI CONCEPTS" val={calc(entries, 'skill_explain_ai')} type="agree" isDark={isDark} t={t} />
-                <Metric label="CAN WRITE CLEAR PROMPTS" val={calc(entries, 'skill_write_prompts')} type="agree" isDark={isDark} t={t} />
-                <Metric label="CAN EVALUATE AI ETHICS" val={calc(entries, 'skill_evaluate_ethics')} type="agree" isDark={isDark} t={t} />
-                <Metric label="CAN CREATE AI CONTENT" val={calc(entries, 'skill_create_content')} type="agree" isDark={isDark} t={t} />
-                <Metric label="CAN IDENTIFY DATA PATTERNS" val={calc(entries, 'skill_identify_patterns')} type="agree" isDark={isDark} t={t} />
-                <Metric label="CAN BUILD AI PORTFOLIO" val={calc(entries, 'skill_build_portfolio')} type="agree" isDark={isDark} t={t} />
+                
+                {program === 'AiCE' && (
+                  <>
+                    <Metric label="CAN EXPLAIN AI CONCEPTS" val={calc(entries, 'skill_explain_ai')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN WRITE CLEAR PROMPTS" val={calc(entries, 'skill_write_prompts')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN EVALUATE AI ETHICS" val={calc(entries, 'skill_evaluate_ethics')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN CREATE AI CONTENT" val={calc(entries, 'skill_create_content')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN IDENTIFY DATA PATTERNS" val={calc(entries, 'skill_identify_patterns')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN BUILD AI PORTFOLIO" val={calc(entries, 'skill_build_portfolio')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+
+                {program === 'Virtual Assistant' && (
+                  <>
+                    <Metric label="PRESENT PROFESSIONALLY AS VA" val={calc(entries, 'skill_va_present_professionally')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COMMUNICATE & MANAGE TIME" val={calc(entries, 'skill_va_communicate_effectively')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="RESPOND TO WORKPLACE SCENARIOS" val={calc(entries, 'skill_va_workplace_scenarios')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE DIGITAL TOOLS EFFICIENTLY" val={calc(entries, 'skill_va_digital_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COMPLETE CORE VA TASKS" val={calc(entries, 'skill_va_core_tasks')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PRESENT WORK CLEARLY" val={calc(entries, 'skill_va_present_work')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="APPLY FOR REMOTE JOBS" val={calc(entries, 'skill_va_apply_jobs')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PITCH SKILLS TO CLIENTS" val={calc(entries, 'skill_va_pitch_skills')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="IDENTIFY A NICHE" val={calc(entries, 'skill_va_identify_niche')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUILD PROFESSIONAL PORTFOLIO" val={calc(entries, 'skill_va_build_portfolio')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
               </>
             )}
             {activeTab === 'eop' && (
@@ -303,10 +287,9 @@ export default async function Dashboard(props: {
             {(activeTab === 'community' || activeTab === 'support') && <Metric label="SESSION QUALITY RATING" val={calc(entries, 'session_quality_csat')} type="quality" isDark={isDark} t={t} />}
           </div>
           
-          {/* Added Demographics to Onboarding for Primary Goal */}
           {activeTab === 'onboarding' && (
             <div className="mt-12 pt-8 border-t" style={{ borderColor: t.cardBorder }}>
-              <h3 className="text-xs font-black uppercase tracking-[0.1em] mb-6" style={{ color: t.textMuted }}>DEMOGRAPHICS</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.1em] mb-6" style={{ color: t.textMuted }}>COHORT DEMOGRAPHICS</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                  <DemographicChart data={entries} column="primary_goal" title="PRIMARY LEARNING GOAL" colorsArr={[colors.iris, colors.springGreen, colors.electricBlue, colors.gold]} isDark={isDark} t={t} />
               </div>
@@ -326,11 +309,8 @@ export default async function Dashboard(props: {
 
         <section className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}>
           <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: t.cardBorder }}>
-            <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>
-              LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span>
-            </h3>
+            <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span></h3>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {aiSummaries && aiSummaries.length > 0 ? (
               aiSummaries.map((summary) => (
@@ -345,15 +325,8 @@ export default async function Dashboard(props: {
             ) : (
               <div className="text-center p-8 rounded-2xl border md:col-span-2 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: t.cardBorder }}>
                 <p className="text-sm font-bold italic" style={{ color: t.textMuted }}>No AI summaries generated for this context yet.</p>
-                
                 <form action={generateAISummary}>
-                  <input type="hidden" name="program" value={program} />
-                  <input type="hidden" name="activeTab" value={activeTab} />
-                  <input type="hidden" name="startDate" value={startDate} />
-                  <input type="hidden" name="endDate" value={endDate} />
-                  <input type="hidden" name="activeEvent" value={activeEvent} />
-                  <input type="hidden" name="reportPeriod" value={reportPeriod} />
-                  
+                  <input type="hidden" name="program" value={program} /><input type="hidden" name="activeTab" value={activeTab} /><input type="hidden" name="startDate" value={startDate} /><input type="hidden" name="endDate" value={endDate} /><input type="hidden" name="activeEvent" value={activeEvent} /><input type="hidden" name="reportPeriod" value={reportPeriod} />
                   <button type="submit" className="px-6 py-3 rounded-xl text-xs font-black tracking-widest text-white transition-all hover:scale-105 shadow-md flex items-center gap-2" style={{ backgroundColor: colors.iris }}>
                     ✨ SUMMARIZE FEEDBACK FOR {(activeTab === 'community' || activeTab === 'support') ? activeEvent.toUpperCase() : (month === 'All' ? `FULL ${quarter}` : month.toUpperCase())}
                   </button>
@@ -379,13 +352,31 @@ export default async function Dashboard(props: {
                   <InsightRow pct={calcTopBox(entries, 'know_pause_withdraw')} text="know exactly what to do if they need to pause or withdraw from the program." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'comms_useful')} text="found emails and community communications clear and highly useful for getting started." isDark={isDark} t={t} />
                   
-                  {/* Skills Assessment Insights */}
-                  <InsightRow pct={calcTopBox(entries, 'skill_explain_ai')} text="feel highly confident explaining artificial intelligence and how AI systems work." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'skill_write_prompts')} text="are confident in writing goal-oriented prompts to guide AI tools for quality results." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'skill_evaluate_ethics')} text="feel highly capable of evaluating an AI tool against core ethical principles." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'skill_create_content')} text="are confident using generative AI to create professional text and multimedia content." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'skill_identify_patterns')} text="are highly confident using AI tools to identify data patterns and visual findings." isDark={isDark} t={t} />
-                  <InsightRow pct={calcTopBox(entries, 'skill_build_portfolio')} text="feel fully ready to build and publish an AI-powered professional portfolio." isDark={isDark} t={t} />
+                  {program === 'AiCE' && (
+                    <>
+                      <InsightRow pct={calcTopBox(entries, 'skill_explain_ai')} text="feel highly confident explaining artificial intelligence and how AI systems work." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_write_prompts')} text="are confident in writing goal-oriented prompts to guide AI tools for quality results." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_evaluate_ethics')} text="feel highly capable of evaluating an AI tool against core ethical principles." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_create_content')} text="are confident using generative AI to create professional text and multimedia content." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_identify_patterns')} text="are highly confident using AI tools to identify data patterns and visual findings." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_build_portfolio')} text="feel fully ready to build and publish an AI-powered professional portfolio." isDark={isDark} t={t} />
+                    </>
+                  )}
+
+                  {program === 'Virtual Assistant' && (
+                    <>
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_present_professionally')} text="are highly confident they can present themselves professionally as a Virtual Assistant." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_communicate_effectively')} text="feel fully prepared to communicate effectively and manage time in a professional setting." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_workplace_scenarios')} text="are confident they can respond to real workplace scenarios with clear, structured thinking." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_digital_tools')} text="feel highly capable of using digital tools like Google Workspace to manage workflows." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_core_tasks')} text="are ready to complete core tasks like research, scheduling, and admin support." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_present_work')} text="feel highly confident presenting their work clearly through structured outputs." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_apply_jobs')} text="are fully confident applying for remote jobs or freelance opportunities." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_pitch_skills')} text="feel prepared to pitch their skills and attract potential clients or employers." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_identify_niche')} text="are confident they can identify a specific VA niche and create an action plan." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_build_portfolio')} text="feel completely ready to build a professional portfolio and use AI tools responsibly." isDark={isDark} t={t} />
+                    </>
+                  )}
                 </>
               )}
               {activeTab === 'eop' && (
