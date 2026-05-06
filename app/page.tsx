@@ -24,20 +24,35 @@ async function generateAISummary(formData: FormData) {
   const reportPeriod = formData.get('reportPeriod') as string;
 
   let rawText = "";
+  
+  // 1. IMPROVED TEXT EXTRACTION: Handling Onboarding and End of Program
   if (activeTab === 'onboarding' || activeTab === 'eop') {
     const table = activeTab === 'onboarding' ? 'survey_onboarding' : 'survey_eop';
-    const { data } = await supabase.from(table).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
-    if (data) {
+    const { data } = await supabase.from(table)
+      .select('*')
+      .eq('program', program)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate);
+      
+    if (data && data.length > 0) {
       data.forEach(row => {
+        // Universal feedback columns
         if (row.unclear_aspects_text) rawText += `Feedback: ${row.unclear_aspects_text}\n`;
         if (row.additional_feedback_text) rawText += `Feedback: ${row.additional_feedback_text}\n`;
+        // Program specific feedback columns
         if (row.missing_info_text) rawText += `Feedback: ${row.missing_info_text}\n`;
         if (row.additional_support_resources_text) rawText += `Feedback: ${row.additional_support_resources_text}\n`;
       });
     }
-  } else if (activeTab === 'community' || activeTab === 'support') {
-    const { data } = await supabase.from('survey_events').select('*').eq('program', program).eq('event_name_date', activeEvent);
-    if (data) {
+  } 
+  // Handling Community/Support Sessions
+  else if (activeTab === 'community' || activeTab === 'support') {
+    const { data } = await supabase.from('survey_events')
+      .select('*')
+      .eq('program', program)
+      .eq('event_name_date', activeEvent);
+      
+    if (data && data.length > 0) {
       data.forEach(row => {
         if (row.improvement_suggestion_text) rawText += `Feedback: ${row.improvement_suggestion_text}\n`;
         if (row.challenging_topic_text) rawText += `Feedback: ${row.challenging_topic_text}\n`;
@@ -45,35 +60,60 @@ async function generateAISummary(formData: FormData) {
     }
   }
 
-  if (!rawText.trim() || rawText.length < 10) return;
+  // Safety exit if no feedback found
+  if (!rawText.trim() || rawText.length < 15) {
+    console.log("AI Summary: Insufficient feedback text found for analysis.");
+    return;
+  }
 
+  // 2. UPDATED MODEL ID AND CLEANER PARSING
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Stable model ID
+  
   const prompt = `
-    You are an expert Data Analyst for an educational program. Analyze the following learner feedback.
-    Identify the 3 to 4 most prominent themes. Return the result strictly as a JSON array of objects. Do not include markdown formatting like \`\`\`json.
-    Each object must have these exactly matching keys:
-    - "theme_title": A short 2-4 word title for the theme.
-    - "summary_text": A 1-sentence summary of what learners are saying.
-    - "response_count": Your estimated number of mentions for this theme (integer).
-    - "question_short": A short category like "General Feedback" or "Improvement".
-    Feedback to analyze: ${rawText}
+    Analyze this learner feedback for the ${program} program. 
+    Identify the 4 most prominent themes. 
+    Return the result STRICTLY as a JSON array of objects. 
+    Do not include markdown tags like \`\`\`json.
+    
+    Format:
+    [
+      {"theme_title": "Title", "summary_text": "One sentence summary", "response_count": 5, "question_short": "Category"}
+    ]
+
+    Feedback: ${rawText.substring(0, 20000)} // Limiting length to avoid token errors
   `;
 
   try {
     const result = await model.generateContent(prompt);
-    let jsonString = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+    const responseText = result.response.text();
+    
+    // Robust JSON Extraction (removes any intro/outro text Gemini might include)
+    const jsonStart = responseText.indexOf('[');
+    const jsonEnd = responseText.lastIndexOf(']') + 1;
+    const jsonString = responseText.substring(jsonStart, jsonEnd).trim();
+    
     const parsedThemes = JSON.parse(jsonString);
 
     const insertRows = parsedThemes.map((theme: any) => ({
-      program: program, tab_name: activeTab, question_short: theme.question_short || 'General',
-      theme_title: theme.theme_title, response_count: theme.response_count || 1, summary_text: theme.summary_text,
-      report_period: reportPeriod, event_name_date: activeTab === 'community' || activeTab === 'support' ? activeEvent : null
+      program: program, 
+      tab_name: activeTab, 
+      question_short: theme.question_short || 'General Feedback',
+      theme_title: theme.theme_title, 
+      response_count: theme.response_count || 1, 
+      summary_text: theme.summary_text,
+      report_period: reportPeriod, 
+      event_name_date: (activeTab === 'community' || activeTab === 'support') ? activeEvent : null
     }));
 
-    await supabase.from('ai_thematic_summaries').insert(insertRows);
+    // Insert into Supabase
+    const { error: insertError } = await supabase.from('ai_thematic_summaries').insert(insertRows);
+    if (insertError) throw insertError;
+
     revalidatePath('/');
-  } catch (error) { console.error("Gemini AI Error:", error); }
+  } catch (error) { 
+    console.error("Gemini AI Error:", error); 
+  }
 }
 
 export default async function Dashboard(props: { searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>; }) {
