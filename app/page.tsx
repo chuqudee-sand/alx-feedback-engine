@@ -2,8 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-// @ts-ignore
-import { useFormStatus } from 'react-dom';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +25,7 @@ async function generateAISummary(formData: FormData) {
 
   let rawText = "";
   
+  // 1. IMPROVED TEXT EXTRACTION: Handling Onboarding and End of Program
   if (activeTab === 'onboarding' || activeTab === 'eop') {
     const table = activeTab === 'onboarding' ? 'survey_onboarding' : 'survey_eop';
     const { data } = await supabase.from(table)
@@ -37,13 +36,16 @@ async function generateAISummary(formData: FormData) {
       
     if (data && data.length > 0) {
       data.forEach(row => {
+        // Universal feedback columns
         if (row.unclear_aspects_text) rawText += `Feedback: ${row.unclear_aspects_text}\n`;
         if (row.additional_feedback_text) rawText += `Feedback: ${row.additional_feedback_text}\n`;
+        // Program specific feedback columns
         if (row.missing_info_text) rawText += `Feedback: ${row.missing_info_text}\n`;
         if (row.additional_support_resources_text) rawText += `Feedback: ${row.additional_support_resources_text}\n`;
       });
     }
   } 
+  // Handling Community/Support Sessions
   else if (activeTab === 'community' || activeTab === 'support') {
     const { data } = await supabase.from('survey_events')
       .select('*')
@@ -58,82 +60,62 @@ async function generateAISummary(formData: FormData) {
     }
   }
 
-  if (!rawText.trim() || rawText.length < 15) return;
+  // Safety exit if no feedback found
+  if (!rawText.trim() || rawText.length < 15) {
+    console.log("AI Summary: Insufficient feedback text found for analysis.");
+    return;
+  }
 
+  // 2. UPDATED MODEL ID AND CLEANER PARSING
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Stable model ID
   
   const prompt = `
     Analyze this learner feedback for the ${program} program. 
-    Identify the 4 most prominent themes. Return result STRICTLY as JSON array.
-    Format: [{"theme_title": "Title", "summary_text": "One sentence summary", "response_count": 5, "question_short": "Category"}]
-    Feedback: ${rawText.substring(0, 20000)}
+    Identify the 4 most prominent themes. 
+    Return the result STRICTLY as a JSON array of objects. 
+    Do not include markdown tags like \`\`\`json.
+    
+    Format:
+    [
+      {"theme_title": "Title", "summary_text": "One sentence summary", "response_count": 5, "question_short": "Category"}
+    ]
+
+    Feedback: ${rawText.substring(0, 20000)} // Limiting length to avoid token errors
   `;
 
   try {
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
+    
+    // Robust JSON Extraction (removes any intro/outro text Gemini might include)
     const jsonStart = responseText.indexOf('[');
     const jsonEnd = responseText.lastIndexOf(']') + 1;
-    const parsedThemes = JSON.parse(responseText.substring(jsonStart, jsonEnd).trim());
+    const jsonString = responseText.substring(jsonStart, jsonEnd).trim();
+    
+    const parsedThemes = JSON.parse(jsonString);
 
     const insertRows = parsedThemes.map((theme: any) => ({
-      program, tab_name: activeTab, theme_title: theme.theme_title, 
-      response_count: theme.response_count || 1, summary_text: theme.summary_text,
-      report_period: reportPeriod, event_name_date: (activeTab === 'community' || activeTab === 'support') ? activeEvent : null,
-      question_short: theme.question_short || 'General Feedback'
+      program: program, 
+      tab_name: activeTab, 
+      question_short: theme.question_short || 'General Feedback',
+      theme_title: theme.theme_title, 
+      response_count: theme.response_count || 1, 
+      summary_text: theme.summary_text,
+      report_period: reportPeriod, 
+      event_name_date: (activeTab === 'community' || activeTab === 'support') ? activeEvent : null
     }));
 
-    await supabase.from('ai_thematic_summaries').insert(insertRows);
+    // Insert into Supabase
+    const { error: insertError } = await supabase.from('ai_thematic_summaries').insert(insertRows);
+    if (insertError) throw insertError;
+
     revalidatePath('/');
-  } catch (e) { console.error(e); }
+  } catch (error) { 
+    console.error("Gemini AI Error:", error); 
+  }
 }
 
-// --- UPGRADED COMPONENT: AI SUMMARIZER ---
-function AISummarizer({ summaries, program, activeTab, filters, isDark, t }: any) {
-  return (
-    <section className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}>
-      <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: t.cardBorder }}>
-        <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>
-          LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span>
-        </h3>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {summaries && summaries.length > 0 ? (
-          summaries.map((summary: any) => (
-            <div key={summary.id} className="border-l-4 pl-6 py-2 rounded-r-xl" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: colors.electricBlue }}>
-              <div className="flex justify-between items-start mb-3 gap-2">
-                <h4 className="text-base font-black uppercase tracking-tight leading-tight" style={{ color: t.textMain }}>{summary.theme_title}</h4>
-                <span className="text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0', color: t.textMain }}>{summary.response_count} Mentions</span>
-              </div>
-              <p className="text-sm leading-relaxed italic" style={{ color: isDark ? '#CBD5E1' : '#475569' }}>"{summary.summary_text}"</p>
-            </div>
-          ))
-        ) : (
-          <div className="text-center p-8 rounded-2xl border md:col-span-2 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: t.cardBorder }}>
-            <p className="text-sm font-bold italic" style={{ color: t.textMuted }}>No AI summaries generated for this context yet.</p>
-            <form action={generateAISummary}>
-              {Object.entries(filters).map(([k, v]: any) => <input key={k} type="hidden" name={k} value={v} />)}
-              <SubmitButton label={(activeTab === 'community' || activeTab === 'support') ? filters.activeEvent : (filters.month === 'All' ? `FULL ${filters.quarter}` : filters.month)} />
-            </form>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" disabled={pending} className="px-6 py-3 rounded-xl text-xs font-black tracking-widest text-white transition-all hover:scale-105 shadow-md flex items-center gap-2 disabled:opacity-50" style={{ backgroundColor: colors.iris }}>
-      {pending ? "✨ ANALYZING FEEDBACK..." : `✨ SUMMARIZE FEEDBACK FOR ${label.toUpperCase()}`}
-    </button>
-  );
-}
-
-// --- MAIN DASHBOARD ---
 export default async function Dashboard(props: { searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>; }) {
   const params = await props.searchParams;
   const program = params.program || 'AiCE'; 
@@ -151,6 +133,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
     textMain: isDark ? colors.white : colors.berkeleyBlue, textMuted: isDark ? '#94A3B8' : '#64748B',
   };
 
+  const tabDisplayMap: Record<string, string> = { onboarding: 'Onboarding', community: 'Community Events', support: 'Learner Support Webinars', eop: 'End of Program' };
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
     Q1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
     Q2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
@@ -217,7 +200,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3" style={{ color: t.textMain }}>
-              <span className="uppercase">{program}</span> <span className="text-zinc-500 font-medium text-3xl"> &rarr; </span> <span>{{ onboarding: 'Onboarding', community: 'Community Events', support: 'Learner Support Webinars', eop: 'End of Program' }[activeTab]}</span>
+              <span className="uppercase">{program}</span> <span className="text-zinc-500 font-medium text-3xl"> &rarr; </span> <span>{tabDisplayMap[activeTab]}</span>
             </h2>
             <p className="text-lg italic font-medium" style={{ color: t.textMuted }}>Program Feedback Automation & Analysis</p>
           </div>
@@ -306,6 +289,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                 <Metric label="PAUSE/WITHDRAW CLARITY" val={calc(entries, 'know_pause_withdraw')} type="agree" isDark={isDark} t={t} />
                 <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} type="help" isDark={isDark} t={t} />
                 
+                {/* DYNAMIC SKILLS ASSESSMENT BASED ON PROGRAM */}
                 <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t" style={{ borderColor: t.cardBorder }}>
                    <h4 className="text-xs font-black uppercase tracking-[0.1em] mb-4" style={{ color: t.textMuted }}>{program.toUpperCase()} SKILLS ASSESSMENT BASELINE</h4>
                 </div>
@@ -363,15 +347,34 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
           )}
         </section>
 
-        {/* --- USING THE NEW UPGRADED AISUMMARIZER COMPONENT --- */}
-        <AISummarizer 
-          summaries={aiSummaries} 
-          program={program} 
-          activeTab={activeTab} 
-          isDark={isDark} 
-          t={t}
-          filters={{ program, activeTab, startDate, endDate, activeEvent, reportPeriod, month, quarter }}
-        />
+        <section className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}>
+          <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: t.cardBorder }}>
+            <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span></h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {aiSummaries && aiSummaries.length > 0 ? (
+              aiSummaries.map((summary) => (
+                <div key={summary.id} className="border-l-4 pl-6 py-2 rounded-r-xl" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: colors.electricBlue }}>
+                  <div className="flex justify-between items-start mb-3 gap-2">
+                    <h4 className="text-base font-black uppercase tracking-tight leading-tight" style={{ color: t.textMain }}>{summary.theme_title}</h4>
+                    <span className="text-[10px] font-bold px-3 py-1 rounded-full whitespace-nowrap" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0', color: t.textMain }}>{summary.response_count} Mentions</span>
+                  </div>
+                  <p className="text-sm leading-relaxed italic" style={{ color: isDark ? '#CBD5E1' : '#475569' }}>"{summary.summary_text}"</p>
+                </div>
+              ))
+            ) : (
+              <div className="text-center p-8 rounded-2xl border md:col-span-2 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: t.cardBorder }}>
+                <p className="text-sm font-bold italic" style={{ color: t.textMuted }}>No AI summaries generated for this context yet.</p>
+                <form action={generateAISummary}>
+                  <input type="hidden" name="program" value={program} /><input type="hidden" name="activeTab" value={activeTab} /><input type="hidden" name="startDate" value={startDate} /><input type="hidden" name="endDate" value={endDate} /><input type="hidden" name="activeEvent" value={activeEvent} /><input type="hidden" name="reportPeriod" value={reportPeriod} />
+                  <button type="submit" className="px-6 py-3 rounded-xl text-xs font-black tracking-widest text-white transition-all hover:scale-105 shadow-md flex items-center gap-2" style={{ backgroundColor: colors.iris }}>
+                    ✨ SUMMARIZE FEEDBACK FOR {(activeTab === 'community' || activeTab === 'support') ? activeEvent.toUpperCase() : (month === 'All' ? `FULL ${quarter}` : month.toUpperCase())}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </section>
 
         {(activeTab === 'onboarding' || activeTab === 'eop') && (
           <section className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}>
@@ -388,6 +391,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                   <InsightRow pct={calcTopBox(entries, 'access_support_tools')} text="are clear on how to access key support tools like LEA, Chidi, and PeerFinder." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'know_pause_withdraw')} text="know exactly what to do if they need to pause or withdraw from the program." isDark={isDark} t={t} />
                   <InsightRow pct={calcTopBox(entries, 'comms_useful')} text="found emails and community communications clear and highly useful for getting started." isDark={isDark} t={t} />
+                  
                   {program === 'AiCE' && (
                     <>
                       <InsightRow pct={calcTopBox(entries, 'skill_explain_ai')} text="feel highly confident explaining artificial intelligence and how AI systems work." isDark={isDark} t={t} />
@@ -398,6 +402,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                       <InsightRow pct={calcTopBox(entries, 'skill_build_portfolio')} text="feel fully ready to build and publish an AI-powered professional portfolio." isDark={isDark} t={t} />
                     </>
                   )}
+
                   {program === 'Virtual Assistant' && (
                     <>
                       <InsightRow pct={calcTopBox(entries, 'skill_va_present_professionally')} text="are highly confident they can present themselves professionally as a Virtual Assistant." isDark={isDark} t={t} />
@@ -434,4 +439,4 @@ function DemographicChart({ data, column, title, colorsArr, isDark, t }: any) { 
 function calc(data: any[] | null, col: string) { if (!data?.length) return 0; const valid = data.filter(d => d[col] !== null); return valid.length ? (valid.reduce((a, c) => a + (c[col] || 0), 0) / valid.length).toFixed(1) : "0"; }
 function calcTopBox(data: any[] | null, col: string) { if (!data?.length) return 0; const valid = data.filter(d => d[col] !== null); if (valid.length === 0) return 0; const topBoxCount = valid.filter(d => d[col] >= 4).length; return Math.round((topBoxCount / valid.length) * 100); }
 function calcOutcome(data: any[] | null) { if(!data?.length) return 0; const valid = data.filter(d => d.understood_outcomes !== null); return valid.length ? ((valid.filter(d => d.understood_outcomes === true).length / valid.length) * 100).toFixed(0) : "0"; }
-function calcNPS(data: any[] | null) { if (!data?.length) return { score: 0, p: 0, ps: 0, d: 0 }; const p = data.filter(e => e.nps_score >= 9).length; const ps = data.filter(e => e.nps_score === 7 || e.nps_score === 8).length; const d = data.filter(e => e.nps_score <= 6).length; const total = data.length; if (!total) return { score: 0, p: 0, ps: 0, d: 0 }; return { score: (((p / total) * 100) - ((d / total) * 100)).toFixed(0), p: ((p / total) * 100).toFixed(0), ps: ((ps / total) * 100).toFixed(0), d: ((d / total) * 100).toFixed(0) }; }
+function calcNPS(data: any[] | null) { if (!data?.length) return { score: 0, p: 0, ps: 0, d: 0 }; const p = data.filter(e => e.nps_score >= 9).length; const ps = data.filter(e => e.nps_score === 7 || e.nps_score === 8).length; const d = data.filter(e => e.nps_score <= 6).length; const total = data.length; return { score: (((p / total) * 100) - ((d / total) * 100)).toFixed(0), p: ((p / total) * 100).toFixed(0), ps: ((ps / total) * 100).toFixed(0), d: ((d / total) * 100).toFixed(0) }; }
