@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
-import { revalidatePath } from 'next/cache';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+// ─── REPLACE THIS WITH YOUR RENDER SERVICE URL ───────────────────────────────
+const RENDER_BACKEND_URL = process.env.RENDER_BACKEND_URL || 'https://feedback-summarizer-kkds.onrender.com';
+// ─────────────────────────────────────────────────────────────────────────────
 
 const colors = {
   berkeleyBlue: '#002B56', sidebarNavy: '#001428', springGreen: '#05F283',
@@ -13,115 +15,12 @@ const colors = {
   blueNCS: '#028ECA', tomato: '#FF5347', gold: '#FBD437', turquoise: '#41C9B9'
 };
 
-// --- SERVER ACTION: THE AI SUMMARIZATION ENGINE ---
-async function generateAISummary(formData: FormData) {
-  'use server';
-  const program = formData.get('program') as string;
-  const activeTab = formData.get('activeTab') as string;
-  const startDate = formData.get('startDate') as string;
-  const endDate = formData.get('endDate') as string;
-  const activeEvent = formData.get('activeEvent') as string;
-  const reportPeriod = formData.get('reportPeriod') as string;
-
-  let rawText = "";
-  
-  // 1. IMPROVED TEXT EXTRACTION: Handling Onboarding and End of Program
-  if (activeTab === 'onboarding' || activeTab === 'eop') {
-    const table = activeTab === 'onboarding' ? 'survey_onboarding' : 'survey_eop';
-    const { data } = await supabase.from(table)
-      .select('*')
-      .eq('program', program)
-      .gte('created_at', startDate)
-      .lte('created_at', endDate);
-      
-    if (data && data.length > 0) {
-      data.forEach(row => {
-        // Universal feedback columns
-        if (row.unclear_aspects_text) rawText += `Feedback: ${row.unclear_aspects_text}\n`;
-        if (row.additional_feedback_text) rawText += `Feedback: ${row.additional_feedback_text}\n`;
-        // Program specific feedback columns
-        if (row.missing_info_text) rawText += `Feedback: ${row.missing_info_text}\n`;
-        if (row.additional_support_resources_text) rawText += `Feedback: ${row.additional_support_resources_text}\n`;
-      });
-    }
-  } 
-  // Handling Community/Support Sessions
-  else if (activeTab === 'community' || activeTab === 'support') {
-    const { data } = await supabase.from('survey_events')
-      .select('*')
-      .eq('program', program)
-      .eq('event_name_date', activeEvent);
-      
-    if (data && data.length > 0) {
-      data.forEach(row => {
-        if (row.improvement_suggestion_text) rawText += `Feedback: ${row.improvement_suggestion_text}\n`;
-        if (row.challenging_topic_text) rawText += `Feedback: ${row.challenging_topic_text}\n`;
-      });
-    }
-  }
-
-  // Safety exit if no feedback found
-  if (!rawText.trim() || rawText.length < 15) {
-    console.log("AI Summary: Insufficient feedback text found for analysis.");
-    return;
-  }
-
-  // 2. UPDATED MODEL ID AND CLEANER PARSING
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Stable model ID
-  
-  const prompt = `
-    Analyze this learner feedback for the ${program} program. 
-    Identify the 4 most prominent themes. 
-    Return the result STRICTLY as a JSON array of objects. 
-    Do not include markdown tags like \`\`\`json.
-    
-    Format:
-    [
-      {"theme_title": "Title", "summary_text": "One sentence summary", "response_count": 5, "question_short": "Category"}
-    ]
-
-    Feedback: ${rawText.substring(0, 20000)} // Limiting length to avoid token errors
-  `;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    
-    // Robust JSON Extraction (removes any intro/outro text Gemini might include)
-    const jsonStart = responseText.indexOf('[');
-    const jsonEnd = responseText.lastIndexOf(']') + 1;
-    const jsonString = responseText.substring(jsonStart, jsonEnd).trim();
-    
-    const parsedThemes = JSON.parse(jsonString);
-
-    const insertRows = parsedThemes.map((theme: any) => ({
-      program: program, 
-      tab_name: activeTab, 
-      question_short: theme.question_short || 'General Feedback',
-      theme_title: theme.theme_title, 
-      response_count: theme.response_count || 1, 
-      summary_text: theme.summary_text,
-      report_period: reportPeriod, 
-      event_name_date: (activeTab === 'community' || activeTab === 'support') ? activeEvent : null
-    }));
-
-    // Insert into Supabase
-    const { error: insertError } = await supabase.from('ai_thematic_summaries').insert(insertRows);
-    if (insertError) throw insertError;
-
-    revalidatePath('/');
-  } catch (error) { 
-    console.error("Gemini AI Error:", error); 
-  }
-}
-
 export default async function Dashboard(props: { searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>; }) {
   const params = await props.searchParams;
   const program = params.program || 'AiCE'; 
   const activeTab = params.tab || 'onboarding';
   const year = params.year || '2026';
-  const quarter = params.quarter || 'Q1';
+  const quarter = params.quarter || 'S1';
   const month = params.month || 'All';
   const theme = params.theme || 'light';
   const selectedEvent = params.event || 'All';
@@ -135,9 +34,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
   const tabDisplayMap: Record<string, string> = { onboarding: 'Onboarding', community: 'Community Events', support: 'Learner Support Webinars', eop: 'End of Program' };
   const quarterMonths: Record<string, { name: string, val: string }[]> = {
-    Q1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
-    Q2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
-    Q3: [{name: 'Sep', val: '09'}, {name: 'Oct', val: '10'}, {name: 'Nov', val: '11'}, {name: 'Dec', val: '12'}],
+    S1: [{name: 'Jan', val: '01'}, {name: 'Feb', val: '02'}, {name: 'Mar', val: '03'}, {name: 'Apr', val: '04'}],
+    S2: [{name: 'May', val: '05'}, {name: 'Jun', val: '06'}, {name: 'Jul', val: '07'}, {name: 'Aug', val: '08'}],
+    S3: [{name: 'Sep', val: '09'}, {name: 'Oct', val: '10'}, {name: 'Nov', val: '11'}, {name: 'Dec', val: '12'}],
   };
   const monthEnds: Record<string, string> = { '01': '31', '02': '28', '03': '31', '04': '30', '05': '31', '06': '30', '07': '31', '08': '31', '09': '30', '10': '31', '11': '30', '12': '31' };
 
@@ -172,10 +71,28 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   const { data: entries } = await query;
   const total = entries?.length || 0;
 
+  // ── Fetch AI summaries ──────────────────────────────────────────────────────
   let summaryQuery = supabase.from('ai_thematic_summaries').select('*').eq('program', program).eq('tab_name', activeTab);
   if (activeTab === 'onboarding' || activeTab === 'eop') summaryQuery = summaryQuery.eq('report_period', reportPeriod);
   else summaryQuery = summaryQuery.eq('event_name_date', activeEvent);
   const { data: aiSummaries } = await summaryQuery.order('created_at', { ascending: false }).limit(6);
+
+  // ── Fetch job status for this exact context ─────────────────────────────────
+  const jobKey = (activeTab === 'community' || activeTab === 'support')
+    ? `${program}|${activeTab}|${activeEvent}`
+    : `${program}|${activeTab}|${reportPeriod}`;
+
+  const { data: jobRow } = await supabase
+    .from('ai_summary_jobs')
+    .select('status, error_message')
+    .eq('job_key', jobKey)
+    .maybeSingle();
+
+  const jobStatus = jobRow?.status as 'busy' | 'done' | 'failed' | null;
+  const jobError = jobRow?.error_message as string | null;
+
+  // ── Payload for the Render trigger (passed to the client component) ──────────
+  const summaryPayload = { program, activeTab, startDate, endDate, activeEvent, reportPeriod };
 
   const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
   const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
@@ -214,7 +131,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                 ))}
               </div>
               <div className="flex p-1 rounded-xl shadow-inner backdrop-blur-sm" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,43,86,0.05)' }}>
-                {['Q1', 'Q2', 'Q3'].map(q => (
+                {['S1', 'S2', 'S3'].map(q => (
                   <Link key={q} href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${q}&month=All&theme=${theme}`} className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'shadow-sm' : 'hover:opacity-70'}`} style={{ backgroundColor: quarter === q ? t.cardBg : 'transparent', color: quarter === q ? t.textMain : t.textMuted }}>{q}</Link>
                 ))}
               </div>
@@ -289,7 +206,6 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                 <Metric label="PAUSE/WITHDRAW CLARITY" val={calc(entries, 'know_pause_withdraw')} type="agree" isDark={isDark} t={t} />
                 <Metric label="COMMS CLARITY & USEFULNESS" val={calc(entries, 'comms_useful')} type="help" isDark={isDark} t={t} />
                 
-                {/* DYNAMIC SKILLS ASSESSMENT BASED ON PROGRAM */}
                 <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t" style={{ borderColor: t.cardBorder }}>
                    <h4 className="text-xs font-black uppercase tracking-[0.1em] mb-4" style={{ color: t.textMuted }}>{program.toUpperCase()} SKILLS ASSESSMENT BASELINE</h4>
                 </div>
@@ -347,11 +263,16 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
           )}
         </section>
 
+        {/* ── AI SUMMARY SECTION ─────────────────────────────────────────── */}
         <section className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10" style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}>
           <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: t.cardBorder }}>
-            <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span></h3>
+            <h3 className="text-lg font-black uppercase tracking-widest flex items-end gap-2" style={{ color: t.textMain }}>
+              LEARNER FEEDBACK SUMMARY <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(AI generated)</span>
+            </h3>
           </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* ── State 1: Summaries already exist → show them ── */}
             {aiSummaries && aiSummaries.length > 0 ? (
               aiSummaries.map((summary) => (
                 <div key={summary.id} className="border-l-4 pl-6 py-2 rounded-r-xl" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: colors.electricBlue }}>
@@ -363,14 +284,61 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                 </div>
               ))
             ) : (
-              <div className="text-center p-8 rounded-2xl border md:col-span-2 flex flex-col items-center justify-center gap-4" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: t.cardBorder }}>
-                <p className="text-sm font-bold italic" style={{ color: t.textMuted }}>No AI summaries generated for this context yet.</p>
-                <form action={generateAISummary}>
-                  <input type="hidden" name="program" value={program} /><input type="hidden" name="activeTab" value={activeTab} /><input type="hidden" name="startDate" value={startDate} /><input type="hidden" name="endDate" value={endDate} /><input type="hidden" name="activeEvent" value={activeEvent} /><input type="hidden" name="reportPeriod" value={reportPeriod} />
-                  <button type="submit" className="px-6 py-3 rounded-xl text-xs font-black tracking-widest text-white transition-all hover:scale-105 shadow-md flex items-center gap-2" style={{ backgroundColor: colors.iris }}>
-                    ✨ SUMMARIZE FEEDBACK FOR {(activeTab === 'community' || activeTab === 'support') ? activeEvent.toUpperCase() : (month === 'All' ? `FULL ${quarter}` : month.toUpperCase())}
-                  </button>
-                </form>
+              <div className="text-center p-8 rounded-2xl border md:col-span-2 flex flex-col items-center justify-center gap-6" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F8FAFC', borderColor: t.cardBorder }}>
+
+                {/* ── State 2: Job is currently running → show spinner ── */}
+                {jobStatus === 'busy' && (
+                  <>
+                    <div className="flex flex-col items-center gap-3">
+                      {/* CSS-only spinner */}
+                      <div style={{
+                        width: '48px', height: '48px', borderRadius: '50%',
+                        border: `4px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0'}`,
+                        borderTopColor: colors.iris,
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-widest mb-1" style={{ color: t.textMain }}>AI is reading learner responses…</p>
+                      <p className="text-xs" style={{ color: t.textMuted }}>This usually takes 30–60 seconds. Refresh the page in a moment to see the summary.</p>
+                    </div>
+                    {/* Refresh button */}
+                    <a href={`/?program=${program}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}&event=${encodeURIComponent(activeEvent)}`}
+                       className="px-5 py-2.5 rounded-xl text-xs font-black tracking-widest border transition-all hover:scale-105"
+                       style={{ color: t.textMain, borderColor: t.cardBorder, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.white }}>
+                      🔄 REFRESH PAGE
+                    </a>
+                  </>
+                )}
+
+                {/* ── State 3: Job failed → show error + retry button ── */}
+                {jobStatus === 'failed' && (
+                  <>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-3xl">⚠️</span>
+                      <p className="text-sm font-black uppercase tracking-widest" style={{ color: colors.tomato }}>Summary generation failed</p>
+                      <p className="text-xs text-center max-w-sm" style={{ color: t.textMuted }}>
+                        {jobError || 'An unknown error occurred. This is usually caused by insufficient feedback data for the selected period.'}
+                      </p>
+                    </div>
+                    <TriggerSummaryButton payload={summaryPayload} renderUrl={RENDER_BACKEND_URL} label="RETRY SUMMARY" isDark={isDark} colors={colors} />
+                  </>
+                )}
+
+                {/* ── State 4: No job yet → show generate button ── */}
+                {!jobStatus && (
+                  <>
+                    <p className="text-sm font-bold italic" style={{ color: t.textMuted }}>No AI summaries generated for this context yet.</p>
+                    <TriggerSummaryButton
+                      payload={summaryPayload}
+                      renderUrl={RENDER_BACKEND_URL}
+                      label={`✨ SUMMARIZE FEEDBACK FOR ${(activeTab === 'community' || activeTab === 'support') ? activeEvent.toUpperCase() : (month === 'All' ? `FULL ${quarter}` : month.toUpperCase())}`}
+                      isDark={isDark}
+                      colors={colors}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -430,7 +398,33 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   );
 }
 
-// 6. ARCHITECTURAL HELPER FUNCTIONS
+// ── CLIENT COMPONENT: Trigger button that calls Render ──────────────────────
+// NOTE: This needs to be in a separate file: components/TriggerSummaryButton.tsx
+// For now it's inlined as a server component rendering a client island via script.
+// To use properly: move to 'use client' component and import here.
+function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any) {
+  // We use a plain HTML form that posts to an API route to avoid needing 'use client' here.
+  // The API route /api/trigger-summary will call the Render backend.
+  return (
+    <form action="/api/trigger-summary" method="POST">
+      <input type="hidden" name="program" value={payload.program} />
+      <input type="hidden" name="activeTab" value={payload.activeTab} />
+      <input type="hidden" name="startDate" value={payload.startDate} />
+      <input type="hidden" name="endDate" value={payload.endDate} />
+      <input type="hidden" name="activeEvent" value={payload.activeEvent} />
+      <input type="hidden" name="reportPeriod" value={payload.reportPeriod} />
+      <button
+        type="submit"
+        className="px-6 py-3 rounded-xl text-xs font-black tracking-widest text-white transition-all hover:scale-105 shadow-md flex items-center gap-2"
+        style={{ backgroundColor: colors.iris }}
+      >
+        {label}
+      </button>
+    </form>
+  );
+}
+
+// ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 function StatCard({ label, value, accent, isDark, t }: any) { return ( <div className="p-6 rounded-2xl shadow-lg border-t-4 hover:scale-105 transition-all duration-300 cursor-default" style={{ backgroundColor: t.cardBg, borderColor: accent }}> <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: t.textMuted }}>{label}</p> <h4 className="text-5xl font-black" style={{ color: t.textMain }}>{value}</h4> </div> ); }
 function getScaleLabel(val: number, type: string) { if (val >= 4.5) return type === 'agree' ? 'Strongly Agreed' : type === 'help' ? 'Very Helpful' : type === 'quality' ? 'Excellent' : 'Highly Satisfied'; if (val >= 3.9) return type === 'agree' ? 'Agreed' : type === 'help' ? 'Helpful' : type === 'quality' ? 'Very Good' : 'Satisfied'; if (val >= 3.3) return type === 'agree' ? 'Neither' : type === 'help' ? 'Moderate' : type === 'quality' ? 'Good' : 'Neutral'; if (val >= 2.0) return type === 'agree' ? 'Disagreed' : type === 'help' ? 'Unhelpful' : type === 'quality' ? 'Fair' : 'Dissatisfied'; return type === 'agree' ? 'Strongly Disagreed' : type === 'help' ? 'Very Unhelpful' : type === 'quality' ? 'Poor' : 'Very Dissatisfied'; }
 function Metric({ label, val, type = 'sat', isDark, t }: any) { const numVal = Number(val); const width = (numVal / 5) * 100; let finalColor = colors.tomato; if (numVal >= 4.5) finalColor = colors.springGreen; else if (numVal >= 3.9) finalColor = colors.blueNCS; else if (numVal >= 3.3) finalColor = colors.gold; const scaleText = getScaleLabel(numVal, type); return ( <div className="group p-3 rounded-xl hover:scale-[1.02] transition-all duration-300 cursor-default border border-transparent" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'transparent' }}> <div className="flex justify-between items-end mb-2"> <span className="text-[11px] font-black tracking-tight uppercase" style={{ color: t.textMuted }}>{label}</span> <div className="flex items-center gap-3"> <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: finalColor }}>{scaleText}</span> <span className="text-sm font-black" style={{ color: t.textMain }}>{val} / 5.0</span> </div> </div> <div className="h-6 rounded-full overflow-hidden shadow-inner p-0.5" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}> <div style={{ width: `${width}%`, backgroundColor: finalColor }} className="h-full rounded-full transition-all duration-700 shadow-sm" /> </div> </div> ); }
