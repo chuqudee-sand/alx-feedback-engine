@@ -53,13 +53,36 @@ export async function POST(request: Request) {
       const { id: meetingId, topic, host_email, start_time } = body.payload.object;
       const type = body.event === 'webinar.ended' ? 'webinars' : 'meetings';
 
-      // FILTER: Exclude internal meetings
-      if (type === 'meetings' && EXCLUDED_MEETING_KEYWORDS.test(topic)) {
-        console.log(`Blocked internal meeting: "${topic}"`);
+      // FILTER 1: Exclude by topic keyword (applies to both meetings and webinars)
+      if (EXCLUDED_MEETING_KEYWORDS.test(topic)) {
+        console.log(`Blocked by keyword: "${topic}"`);
         return NextResponse.json({ message: 'Ignored - Internal Meeting' }, { status: 200 });
       }
 
-      // CATEGORIZE: Community vs Support
+      // FILTER 2: Reject if host is not a registered program account.
+      // If host doesn't match, fetch participants to check co-hosts before rejecting.
+      let programName = PROGRAM_EMAILS[host_email.toLowerCase()];
+
+      if (!programName) {
+        const tokenForCheck = await getZoomAccessToken();
+        if (!tokenForCheck) throw new Error('Zoom Auth Failed');
+        const checkData = await fetchZoomData(`/report/${type}/${meetingId}/participants`, tokenForCheck);
+        const coHosts = (checkData?.participants || []).filter((p: any) => p.role === 2);
+        for (const coHost of coHosts) {
+          const coEmail = (coHost.user_email || '').toLowerCase();
+          if (PROGRAM_EMAILS[coEmail]) {
+            programName = PROGRAM_EMAILS[coEmail];
+            console.log(`Program from co-host: ${coEmail} → ${programName}`);
+            break;
+          }
+        }
+        if (!programName) {
+          console.log(`Blocked: host "${host_email}" and all co-hosts are unregistered.`);
+          return NextResponse.json({ message: 'Ignored - Unrecognised Host' }, { status: 200 });
+        }
+      }
+
+      // CATEGORIZE: Community vs Support (from topic)
       let eventType = 'Community Event';
       if (COMMUNITY_KEYWORDS.test(topic))    eventType = 'Community Event';
       else if (SUPPORT_KEYWORDS.test(topic)) eventType = 'Program Team';
@@ -69,34 +92,14 @@ export async function POST(request: Request) {
       const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const eventNameDate = `${topic} - ${formattedDate}`;
 
-      console.log(`📨 ${body.event} — "${eventNameDate}" | Host: ${host_email}`);
+      console.log(`📨 ${body.event} — "${eventNameDate}" | Program: ${programName}`);
 
       const token = await getZoomAccessToken();
       if (!token) throw new Error('Zoom Auth Failed');
 
-      // 1. Fetch participants
+      // Fetch participants for data collection
       const participantsData = await fetchZoomData(`/report/${type}/${meetingId}/participants`, token);
       const participants: any[] = participantsData?.participants || [];
-
-      // 2. Detect program: host email first, then co-host fallback
-      let programName = PROGRAM_EMAILS[host_email.toLowerCase()];
-
-      if (!programName) {
-        const coHosts = participants.filter((p: any) => p.role === 2);
-        for (const coHost of coHosts) {
-          const coEmail = (coHost.user_email || '').toLowerCase();
-          if (PROGRAM_EMAILS[coEmail]) {
-            programName = PROGRAM_EMAILS[coEmail];
-            console.log(`Program from co-host: ${coEmail} → ${programName}`);
-            break;
-          }
-        }
-      }
-
-      if (!programName) {
-        console.warn(`Unrecognised host "${host_email}". Defaulting to AiCE.`);
-        programName = 'AiCE';
-      }
 
       if (!participants.length) {
         console.warn(`No participants found for ${meetingId}`);
