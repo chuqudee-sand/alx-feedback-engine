@@ -124,8 +124,13 @@ async function collectZoomData(
   startTime: string,
   type: 'meetings' | 'webinars'
 ) {
-  console.log(`⏳ Waiting 3 minutes for Zoom API to finalise data for ${type} ${meetingId}...`);
-  await new Promise(resolve => setTimeout(resolve, 3 * 60 * 1000));
+  // Wait 30 seconds — enough for Zoom's API to finalise participant and poll
+  // records after a meeting ends. We can't use a long sleep on Vercel because
+  // serverless functions time out at 5 minutes (hobby plan).
+  // Since your surveys are submitted BEFORE the host ends the call,
+  // Zoom's reporting API is almost always ready within 30 seconds.
+  console.log(`⏳ Waiting 30s for Zoom API to finalise data for ${type} ${meetingId}...`);
+  await new Promise(resolve => setTimeout(resolve, 30 * 1000));
   console.log(`🚀 Starting data collection for ${type} ${meetingId}`);
 
   const token = await getZoomAccessToken();
@@ -252,6 +257,10 @@ async function collectZoomData(
 // ══════════════════════════════════════════════════════════════════════════════
 //  ROUTE HANDLER
 // ══════════════════════════════════════════════════════════════════════════════
+
+// Tell Vercel to allow this function up to 5 minutes (300s) — max on hobby plan.
+// This gives enough time for the 30s wait + all Zoom API calls + Supabase insert.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
