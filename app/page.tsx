@@ -95,7 +95,13 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   const summaryPayload = { program, activeTab, startDate, endDate, activeEvent, reportPeriod };
 
   const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
-  const csatVal = total > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / total * 100).toFixed(1) : "0.0";
+  // For community/support: divide by respondents who actually answered the CSAT question,
+  // not total attendees (many attend without submitting the survey poll).
+  // For onboarding/eop: every row IS a survey response so total is correct.
+  const csatRespondents = (activeTab === 'community' || activeTab === 'support')
+    ? (entries?.filter(e => e[csatCol!] !== null && e[csatCol!] !== undefined).length || 0)
+    : total;
+  const csatVal = csatRespondents > 0 ? ((entries?.filter(e => e[csatCol!] >= 4).length || 0) / csatRespondents * 100).toFixed(1) : "0.0";
   const avgAttendance = activeTab === 'community' || activeTab === 'support' ? calc(entries, 'attendance_duration_mins') : "0";
 
   return (
