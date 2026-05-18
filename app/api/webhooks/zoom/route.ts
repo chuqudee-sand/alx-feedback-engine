@@ -97,13 +97,25 @@ export async function POST(request: Request) {
       const token = await getZoomAccessToken();
       if (!token) throw new Error('Zoom Auth Failed');
 
-      // Fetch participants for data collection
-      const participantsData = await fetchZoomData(`/report/${type}/${meetingId}/participants`, token);
-      const participants: any[] = participantsData?.participants || [];
+      // Zoom's report API takes time to populate after a webinar ends.
+      // We retry up to 3 times with 20-second gaps (total max ~60s wait).
+      // This fits within Vercel's function timeout while handling Zoom's delay.
+      let participantsData: any = null;
+      let participants: any[]   = [];
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await new Promise(r => setTimeout(r, 20000)); // wait 20s each attempt
+        participantsData = await fetchZoomData(`/report/${type}/${meetingId}/participants`, token);
+        participants     = participantsData?.participants || [];
+        if (participants.length > 0) {
+          console.log(`Participants ready on attempt ${attempt}: ${participants.length} found`);
+          break;
+        }
+        console.log(`Attempt ${attempt}: participants not ready yet, retrying...`);
+      }
 
       if (!participants.length) {
-        console.warn(`No participants found for ${meetingId}`);
-        return NextResponse.json({ message: 'No participants' }, { status: 200 });
+        console.warn(`No participants found after 3 attempts for ${meetingId}`);
+        return NextResponse.json({ message: 'No participants after retries' }, { status: 200 });
       }
 
       // 3. Build base rows from participants
