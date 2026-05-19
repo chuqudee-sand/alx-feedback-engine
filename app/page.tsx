@@ -53,7 +53,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
   if (activeTab === 'community' || activeTab === 'support') {
     const eventTypeStr = activeTab === 'community' ? 'Community Event' : 'Program Team';
-    const allEventsQuery = await supabase.from(tableMap[activeTab]).select('event_name_date, created_at').eq('program', program).gte('created_at', startDate).lte('created_at', endDate).eq('event_type', eventTypeStr).order('created_at', { ascending: false });
+    const allEventsQuery = await supabase.from(tableMap[activeTab]).select('event_name_date, created_at').eq('program', program).gte('created_at', startDate).lte('created_at', endDate).eq('event_type', eventTypeStr).order('created_at', { ascending: false }).limit(10000);
     if (allEventsQuery.data) {
       const seen = new Set();
       for (const item of allEventsQuery.data) { if (item.event_name_date && !seen.has(item.event_name_date)) { seen.add(item.event_name_date); uniqueEvents.push(item.event_name_date); } }
@@ -63,7 +63,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
   const activeEvent = (selectedEvent === 'All' && latestEvent) ? latestEvent : selectedEvent;
 
-  let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate);
+  let query = supabase.from(tableMap[activeTab]).select('*').eq('program', program).gte('created_at', startDate).lte('created_at', endDate).limit(10000);
   if (activeTab === 'community') query = query.eq('event_type', 'Community Event');
   if (activeTab === 'support') query = query.eq('event_type', 'Program Team'); 
   if ((activeTab === 'community' || activeTab === 'support') && activeEvent && activeEvent !== 'All') query = query.eq('event_name_date', activeEvent);
