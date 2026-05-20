@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { config, supabase as supabaseConfig } from './config';
 import { calcTopBox, calc, calcOutcome, calcNPS } from './utils/helpers';
-import { colors } from './utils/style';
-import { date as dateConstants } from './utils/constants/date';
+import { colors, getThemeStyle } from './utils/style';
+import { date } from './utils/constants/date';
 import Link from 'next/link';
+import { getDate } from './utils/date';
+import { Days_One } from 'next/font/google';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,14 +35,7 @@ export default async function Dashboard(props: {
 	const selectedEvent = params.event || 'All';
 	const isDark = theme === 'dark';
 
-	const t = {
-		bg: isDark ? colors.berkeleyBlue : '#e2e4e7f6',
-		sidebar: isDark ? colors.sidebarNavy : colors.berkeleyBlue,
-		cardBg: isDark ? 'rgba(255, 255, 255, 0.05)' : colors.white,
-		cardBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
-		textMain: isDark ? colors.white : colors.berkeleyBlue,
-		textMuted: isDark ? '#94A3B8' : '#64748B',
-	};
+	const themeStyle = getThemeStyle(isDark);
 
 	const tabDisplayMap: Record<string, string> = {
 		onboarding: 'Onboarding',
@@ -49,20 +44,8 @@ export default async function Dashboard(props: {
 		eop: 'End of Program',
 	};
 
-	const { quarterMonths, monthEnds } = dateConstants;
-
-	let startDate, endDate, reportPeriod;
-	if (month !== 'All') {
-		startDate = `${year}-${month}-01T00:00:00Z`;
-		endDate = `${year}-${month}-${monthEnds[month]}T23:59:59Z`;
-		reportPeriod = `${year}-${month}`;
-	} else {
-		const startM = quarterMonths[quarter][0].val;
-		const endM = quarterMonths[quarter][3].val;
-		startDate = `${year}-${startM}-01T00:00:00Z`;
-		endDate = `${year}-${endM}-${monthEnds[endM]}T23:59:59Z`;
-		reportPeriod = `${year}-${quarter}`;
-	}
+	const { startDate, endDate, reportPeriod } = getDate(year, month, quarter);
+	const { quarterMonths } = date;
 
 	const tableMap: Record<string, string> = {
 		onboarding: 'survey_onboarding',
@@ -191,8 +174,8 @@ export default async function Dashboard(props: {
 			className="flex min-h-screen transition-colors duration-500 relative"
 			style={{
 				fontFamily: "'Ubuntu', sans-serif",
-				backgroundColor: t.bg,
-				color: t.textMain,
+				backgroundColor: themeStyle.bg,
+				color: themeStyle.textMain,
 			}}
 		>
 			<div
@@ -209,7 +192,7 @@ export default async function Dashboard(props: {
 
 			<aside
 				className="w-80 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-20"
-				style={{ backgroundColor: t.sidebar }}
+				style={{ backgroundColor: themeStyle.sidebar }}
 			>
 				<div>
 					<h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">
@@ -246,12 +229,12 @@ export default async function Dashboard(props: {
 			<main className="flex-1 p-10 overflow-y-auto relative z-10">
 				<header
 					className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6"
-					style={{ borderColor: t.cardBorder }}
+					style={{ borderColor: themeStyle.cardBorder }}
 				>
 					<div className="mb-6 md:mb-0">
 						<h2
 							className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3"
-							style={{ color: t.textMain }}
+							style={{ color: themeStyle.textMain }}
 						>
 							<span className="uppercase">{program}</span>{' '}
 							<span className="text-zinc-500 font-medium text-3xl">
@@ -262,7 +245,7 @@ export default async function Dashboard(props: {
 						</h2>
 						<p
 							className="text-lg italic font-medium"
-							style={{ color: t.textMuted }}
+							style={{ color: themeStyle.textMuted }}
 						>
 							Program Feedback Automation & Analysis
 						</p>
@@ -279,8 +262,8 @@ export default async function Dashboard(props: {
 									backgroundColor: isDark
 										? 'rgba(255,255,255,0.1)'
 										: colors.white,
-									color: t.textMain,
-									borderColor: t.cardBorder,
+									color: themeStyle.textMain,
+									borderColor: themeStyle.cardBorder,
 								}}
 							>
 								{isDark ? '☀️ LIGHT MODE' : '🌙 DARK MODE'}
@@ -301,8 +284,10 @@ export default async function Dashboard(props: {
 											year === y ? 'shadow-sm' : 'hover:opacity-70'
 										}`}
 										style={{
-											backgroundColor: year === y ? t.cardBg : 'transparent',
-											color: year === y ? t.textMain : t.textMuted,
+											backgroundColor:
+												year === y ? themeStyle.cardBg : 'transparent',
+											color:
+												year === y ? themeStyle.textMain : themeStyle.textMuted,
 										}}
 									>
 										{y}
@@ -325,8 +310,12 @@ export default async function Dashboard(props: {
 											quarter === q ? 'shadow-sm' : 'hover:opacity-70'
 										}`}
 										style={{
-											backgroundColor: quarter === q ? t.cardBg : 'transparent',
-											color: quarter === q ? t.textMain : t.textMuted,
+											backgroundColor:
+												quarter === q ? themeStyle.cardBg : 'transparent',
+											color:
+												quarter === q
+													? themeStyle.textMain
+													: themeStyle.textMuted,
 										}}
 									>
 										{q}
@@ -338,7 +327,7 @@ export default async function Dashboard(props: {
 							className="flex gap-1 p-1 rounded-xl border"
 							style={{
 								backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white,
-								borderColor: t.cardBorder,
+								borderColor: themeStyle.cardBorder,
 							}}
 						>
 							<Link
@@ -353,7 +342,7 @@ export default async function Dashboard(props: {
 												? 'rgba(255,255,255,0.1)'
 												: colors.berkeleyBlue
 											: 'transparent',
-									color: month === 'All' ? colors.white : t.textMuted,
+									color: month === 'All' ? colors.white : themeStyle.textMuted,
 								}}
 							>
 								FULL {quarter}
@@ -372,7 +361,8 @@ export default async function Dashboard(props: {
 													? 'rgba(255,255,255,0.1)'
 													: colors.berkeleyBlue
 												: 'transparent',
-										color: month === m.val ? colors.white : t.textMuted,
+										color:
+											month === m.val ? colors.white : themeStyle.textMuted,
 									}}
 								>
 									{m.name.toUpperCase()}
@@ -398,7 +388,10 @@ export default async function Dashboard(props: {
 									: 'border-transparent hover:opacity-70'
 							}`}
 							style={{
-								color: activeTab === tab.id ? t.textMain : t.textMuted,
+								color:
+									activeTab === tab.id
+										? themeStyle.textMain
+										: themeStyle.textMuted,
 								borderColor:
 									activeTab === tab.id ? colors.springGreen : 'transparent',
 							}}
@@ -413,7 +406,7 @@ export default async function Dashboard(props: {
 						<div className="mb-4 relative z-40 flex items-center gap-3">
 							<span
 								className="text-[10px] font-black uppercase tracking-widest"
-								style={{ color: t.textMuted }}
+								style={{ color: themeStyle.textMuted }}
 							>
 								Filter by Event:
 							</span>
@@ -430,8 +423,8 @@ export default async function Dashboard(props: {
 										backgroundColor: isDark
 											? 'rgba(255,255,255,0.1)'
 											: colors.white,
-										color: t.textMain,
-										borderColor: t.cardBorder,
+										color: themeStyle.textMain,
+										borderColor: themeStyle.cardBorder,
 									}}
 								>
 									{activeEvent.length > 40
@@ -447,7 +440,7 @@ export default async function Dashboard(props: {
 									className="absolute top-full left-0 mt-2 hidden peer-checked:flex flex-col border rounded-xl shadow-2xl max-h-64 overflow-y-auto whitespace-nowrap min-w-[280px] z-50"
 									style={{
 										backgroundColor: isDark ? colors.sidebarNavy : colors.white,
-										borderColor: t.cardBorder,
+										borderColor: themeStyle.cardBorder,
 									}}
 								>
 									{uniqueEvents.map((ev) => (
@@ -459,8 +452,10 @@ export default async function Dashboard(props: {
 											className="px-4 py-3 text-[10px] font-bold border-b last:border-0 transition-colors hover:bg-zinc-100/10"
 											style={{
 												color:
-													activeEvent === ev ? colors.springGreen : t.textMuted,
-												borderColor: t.cardBorder,
+													activeEvent === ev
+														? colors.springGreen
+														: themeStyle.textMuted,
+												borderColor: themeStyle.cardBorder,
 											}}
 										>
 											{ev}
@@ -481,7 +476,7 @@ export default async function Dashboard(props: {
 						value={total}
 						accent={colors.iris}
 						isDark={isDark}
-						t={t}
+						t={themeStyle}
 					/>
 					{(activeTab === 'community' || activeTab === 'support') && (
 						<StatCard
@@ -489,7 +484,7 @@ export default async function Dashboard(props: {
 							value={avgAttendance}
 							accent={colors.turquoise}
 							isDark={isDark}
-							t={t}
+							t={themeStyle}
 						/>
 					)}
 					<StatCard
@@ -497,7 +492,7 @@ export default async function Dashboard(props: {
 						value={`${csatVal}%`}
 						accent={colors.springGreen}
 						isDark={isDark}
-						t={t}
+						t={themeStyle}
 					/>
 					{activeTab === 'support' && (
 						<StatCard
@@ -505,7 +500,7 @@ export default async function Dashboard(props: {
 							value={`${calcOutcome(entries)}%`}
 							accent={colors.blueNCS}
 							isDark={isDark}
-							t={t}
+							t={themeStyle}
 						/>
 					)}
 					{activeTab === 'eop' && (
@@ -515,12 +510,12 @@ export default async function Dashboard(props: {
 								value={calcNPS(entries).score}
 								accent={colors.electricBlue}
 								isDark={isDark}
-								t={t}
+								t={themeStyle}
 							/>
 							<div
 								className="p-6 rounded-2xl shadow-lg border-t-4 flex flex-col justify-center hover:scale-105 transition-all duration-300"
 								style={{
-									backgroundColor: t.cardBg,
+									backgroundColor: themeStyle.cardBg,
 									borderColor: colors.blueNCS,
 								}}
 							>
@@ -528,7 +523,7 @@ export default async function Dashboard(props: {
 									<span style={{ color: colors.springGreen }}>
 										PROMOTERS: {calcNPS(entries).p}%
 									</span>
-									<span style={{ color: t.textMuted }}>
+									<span style={{ color: themeStyle.textMuted }}>
 										PASSIVES: {calcNPS(entries).ps}%
 									</span>
 									<span style={{ color: colors.tomato }}>
@@ -571,11 +566,17 @@ export default async function Dashboard(props: {
 
 				<section
 					className="p-8 rounded-3xl shadow-xl border mb-10"
-					style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}
+					style={{
+						backgroundColor: themeStyle.cardBg,
+						borderColor: themeStyle.cardBorder,
+					}}
 				>
 					<h3
 						className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2"
-						style={{ color: t.textMain, borderColor: t.cardBorder }}
+						style={{
+							color: themeStyle.textMain,
+							borderColor: themeStyle.cardBorder,
+						}}
 					>
 						PILLAR METRICS{' '}
 						<span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">
@@ -590,65 +591,65 @@ export default async function Dashboard(props: {
 									val={calc(entries, 'sat_next_steps')}
 									type="sat"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PROGRAM EXPECTATION CLARITY"
 									val={calc(entries, 'clear_expectations')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="ACCESS TO PROGRAM TEAM"
 									val={calc(entries, 'access_tech_mentors')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="CONNECT WITH PEERS"
 									val={calc(entries, 'connect_peers')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PLATFORM BUG AWARENESS"
 									val={calc(entries, 'help_platform_bugs')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="SUPPORT TOOL CLARITY"
 									val={calc(entries, 'access_support_tools')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PAUSE/WITHDRAW CLARITY"
 									val={calc(entries, 'know_pause_withdraw')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="COMMS CLARITY & USEFULNESS"
 									val={calc(entries, 'comms_useful')}
 									type="help"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 
 								<div
 									className="col-span-1 md:col-span-2 mt-4 pt-4 border-t"
-									style={{ borderColor: t.cardBorder }}
+									style={{ borderColor: themeStyle.cardBorder }}
 								>
 									<h4
 										className="text-xs font-black uppercase tracking-[0.1em] mb-4"
-										style={{ color: t.textMuted }}
+										style={{ color: themeStyle.textMuted }}
 									>
 										{program.toUpperCase()} SKILLS ASSESSMENT BASELINE
 									</h4>
@@ -661,42 +662,42 @@ export default async function Dashboard(props: {
 											val={calc(entries, 'skill_explain_ai')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="CAN WRITE CLEAR PROMPTS"
 											val={calc(entries, 'skill_write_prompts')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="CAN EVALUATE AI ETHICS"
 											val={calc(entries, 'skill_evaluate_ethics')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="CAN CREATE AI CONTENT"
 											val={calc(entries, 'skill_create_content')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="CAN IDENTIFY DATA PATTERNS"
 											val={calc(entries, 'skill_identify_patterns')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="CAN BUILD AI PORTFOLIO"
 											val={calc(entries, 'skill_build_portfolio')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 									</>
 								)}
@@ -708,70 +709,70 @@ export default async function Dashboard(props: {
 											val={calc(entries, 'skill_va_present_professionally')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="COMMUNICATE & MANAGE TIME"
 											val={calc(entries, 'skill_va_communicate_effectively')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="RESPOND TO WORKPLACE SCENARIOS"
 											val={calc(entries, 'skill_va_workplace_scenarios')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="USE DIGITAL TOOLS EFFICIENTLY"
 											val={calc(entries, 'skill_va_digital_tools')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="COMPLETE CORE VA TASKS"
 											val={calc(entries, 'skill_va_core_tasks')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="PRESENT WORK CLEARLY"
 											val={calc(entries, 'skill_va_present_work')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="APPLY FOR REMOTE JOBS"
 											val={calc(entries, 'skill_va_apply_jobs')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="PITCH SKILLS TO CLIENTS"
 											val={calc(entries, 'skill_va_pitch_skills')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="IDENTIFY A NICHE"
 											val={calc(entries, 'skill_va_identify_niche')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 										<Metric
 											label="BUILD PROFESSIONAL PORTFOLIO"
 											val={calc(entries, 'skill_va_build_portfolio')}
 											type="agree"
 											isDark={isDark}
-											t={t}
+											t={themeStyle}
 										/>
 									</>
 								)}
@@ -784,70 +785,70 @@ export default async function Dashboard(props: {
 									val={calc(entries, 'overall_sat')}
 									type="sat"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="CAREER IMPACT"
 									val={calc(entries, 'career_impact')}
 									type="help"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="COMMUNITY EVENTS"
 									val={calc(entries, 'supp_events')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PEER SUPPORT"
 									val={calc(entries, 'supp_peers')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PROGRAM TEAM SUPPORT"
 									val={calc(entries, 'supp_mentors')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="LEA (AI ASSISTANT)"
 									val={calc(entries, 'supp_lea')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="CHIDI (AI ASSISTANT)"
 									val={calc(entries, 'supp_chidi')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PROGRAM TEAM COMMS"
 									val={calc(entries, 'supp_prog_team')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="PEERFINDER APP"
 									val={calc(entries, 'supp_peerfinder')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<Metric
 									label="RESOURCES HUB"
 									val={calc(entries, 'supp_hub')}
 									type="agree"
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 							</>
 						)}
@@ -857,7 +858,7 @@ export default async function Dashboard(props: {
 								val={calc(entries, 'session_quality_csat')}
 								type="quality"
 								isDark={isDark}
-								t={t}
+								t={themeStyle}
 							/>
 						)}
 					</div>
@@ -865,11 +866,11 @@ export default async function Dashboard(props: {
 					{activeTab === 'onboarding' && (
 						<div
 							className="mt-12 pt-8 border-t"
-							style={{ borderColor: t.cardBorder }}
+							style={{ borderColor: themeStyle.cardBorder }}
 						>
 							<h3
 								className="text-xs font-black uppercase tracking-[0.1em] mb-6"
-								style={{ color: t.textMuted }}
+								style={{ color: themeStyle.textMuted }}
 							>
 								COHORT DEMOGRAPHICS
 							</h3>
@@ -885,7 +886,7 @@ export default async function Dashboard(props: {
 										colors.gold,
 									]}
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 							</div>
 						</div>
@@ -894,11 +895,11 @@ export default async function Dashboard(props: {
 					{activeTab === 'eop' && (
 						<div
 							className="mt-12 pt-8 border-t"
-							style={{ borderColor: t.cardBorder }}
+							style={{ borderColor: themeStyle.cardBorder }}
 						>
 							<h3
 								className="text-xs font-black uppercase tracking-[0.1em] mb-6"
-								style={{ color: t.textMuted }}
+								style={{ color: themeStyle.textMuted }}
 							>
 								DEMOGRAPHICS COMPARISON
 							</h3>
@@ -914,7 +915,7 @@ export default async function Dashboard(props: {
 										colors.turquoise,
 									]}
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 								<DemographicChart
 									data={entries}
@@ -927,7 +928,7 @@ export default async function Dashboard(props: {
 										colors.tomato,
 									]}
 									isDark={isDark}
-									t={t}
+									t={themeStyle}
 								/>
 							</div>
 						</div>
@@ -937,15 +938,18 @@ export default async function Dashboard(props: {
 				{/* ── AI SUMMARY SECTION ─────────────────────────────────────────── */}
 				<section
 					className="p-10 rounded-3xl shadow-xl border-t-8 hover:scale-[1.01] transition-transform duration-300 w-full mb-10"
-					style={{ backgroundColor: t.cardBg, borderColor: colors.iris }}
+					style={{
+						backgroundColor: themeStyle.cardBg,
+						borderColor: colors.iris,
+					}}
 				>
 					<div
 						className="flex justify-between items-center mb-8 border-b pb-4"
-						style={{ borderColor: t.cardBorder }}
+						style={{ borderColor: themeStyle.cardBorder }}
 					>
 						<h3
 							className="text-lg font-black uppercase tracking-widest flex items-end gap-2"
-							style={{ color: t.textMain }}
+							style={{ color: themeStyle.textMain }}
 						>
 							LEARNER FEEDBACK SUMMARY{' '}
 							<span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">
@@ -971,7 +975,7 @@ export default async function Dashboard(props: {
 									<div className="flex justify-between items-start mb-3 gap-2">
 										<h4
 											className="text-base font-black uppercase tracking-tight leading-tight"
-											style={{ color: t.textMain }}
+											style={{ color: themeStyle.textMain }}
 										>
 											{summary.theme_title}
 										</h4>
@@ -981,7 +985,7 @@ export default async function Dashboard(props: {
 												backgroundColor: isDark
 													? 'rgba(255,255,255,0.1)'
 													: '#E2E8F0',
-												color: t.textMain,
+												color: themeStyle.textMain,
 											}}
 										>
 											{summary.response_count} Mentions
@@ -1002,7 +1006,7 @@ export default async function Dashboard(props: {
 									backgroundColor: isDark
 										? 'rgba(255,255,255,0.02)'
 										: '#F8FAFC',
-									borderColor: t.cardBorder,
+									borderColor: themeStyle.cardBorder,
 								}}
 							>
 								{/* ── State 2: Job is currently running → show spinner ── */}
@@ -1027,11 +1031,14 @@ export default async function Dashboard(props: {
 										<div>
 											<p
 												className="text-sm font-black uppercase tracking-widest mb-1"
-												style={{ color: t.textMain }}
+												style={{ color: themeStyle.textMain }}
 											>
 												AI is reading learner responses…
 											</p>
-											<p className="text-xs" style={{ color: t.textMuted }}>
+											<p
+												className="text-xs"
+												style={{ color: themeStyle.textMuted }}
+											>
 												This usually takes 30–60 seconds. Refresh the page in a
 												moment to see the summary.
 											</p>
@@ -1043,8 +1050,8 @@ export default async function Dashboard(props: {
 											)}`}
 											className="px-5 py-2.5 rounded-xl text-xs font-black tracking-widest border transition-all hover:scale-105"
 											style={{
-												color: t.textMain,
-												borderColor: t.cardBorder,
+												color: themeStyle.textMain,
+												borderColor: themeStyle.cardBorder,
 												backgroundColor: isDark
 													? 'rgba(255,255,255,0.05)'
 													: colors.white,
@@ -1068,7 +1075,7 @@ export default async function Dashboard(props: {
 											</p>
 											<p
 												className="text-xs text-center max-w-sm"
-												style={{ color: t.textMuted }}
+												style={{ color: themeStyle.textMuted }}
 											>
 												{jobError ||
 													'An unknown error occurred. This is usually caused by insufficient feedback data for the selected period.'}
@@ -1089,7 +1096,7 @@ export default async function Dashboard(props: {
 									<>
 										<p
 											className="text-sm font-bold italic"
-											style={{ color: t.textMuted }}
+											style={{ color: themeStyle.textMuted }}
 										>
 											No AI summaries generated for this context yet.
 										</p>
@@ -1116,18 +1123,24 @@ export default async function Dashboard(props: {
 				{(activeTab === 'onboarding' || activeTab === 'eop') && (
 					<section
 						className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4"
-						style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}
+						style={{
+							backgroundColor: themeStyle.cardBg,
+							borderColor: colors.turquoise,
+						}}
 					>
 						<h3
 							className="text-2xl font-black mb-2 uppercase tracking-tight flex items-end gap-3"
-							style={{ color: t.textMain }}
+							style={{ color: themeStyle.textMain }}
 						>
 							KEY SENTIMENT INSIGHTS{' '}
 							<span className="text-sm normal-case tracking-normal opacity-70 mb-1">
 								(top-box scoring)
 							</span>
 						</h3>
-						<p className="text-sm italic mb-8" style={{ color: t.textMuted }}>
+						<p
+							className="text-sm italic mb-8"
+							style={{ color: themeStyle.textMuted }}
+						>
 							Percentage of respondents scoring 4 or 5. Extracted directly from
 							Pillar Metrics.
 						</p>
@@ -1138,49 +1151,49 @@ export default async function Dashboard(props: {
 										pct={calcTopBox(entries, 'sat_next_steps')}
 										text="are highly satisfied with their onboarding experience and confidently know their next steps."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'clear_expectations')}
 										text="completely understand the program's expectations and graduation requirements."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'access_tech_mentors')}
 										text="know exactly how to access the Program Team for expert guidance when needed."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'connect_peers')}
 										text="know exactly how to connect with peers and Community Ambassadors for support."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'help_platform_bugs')}
 										text="know where to go to get help with platform issues and technical bugs."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'access_support_tools')}
 										text="are clear on how to access key support tools like LEA, Chidi, and PeerFinder."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'know_pause_withdraw')}
 										text="know exactly what to do if they need to pause or withdraw from the program."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'comms_useful')}
 										text="found emails and community communications clear and highly useful for getting started."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 
 									{program === 'AiCE' && (
@@ -1189,37 +1202,37 @@ export default async function Dashboard(props: {
 												pct={calcTopBox(entries, 'skill_explain_ai')}
 												text="feel highly confident explaining artificial intelligence and how AI systems work."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_write_prompts')}
 												text="are confident in writing goal-oriented prompts to guide AI tools for quality results."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_evaluate_ethics')}
 												text="feel highly capable of evaluating an AI tool against core ethical principles."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_create_content')}
 												text="are confident using generative AI to create professional text and multimedia content."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_identify_patterns')}
 												text="are highly confident using AI tools to identify data patterns and visual findings."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_build_portfolio')}
 												text="feel fully ready to build and publish an AI-powered professional portfolio."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 										</>
 									)}
@@ -1233,7 +1246,7 @@ export default async function Dashboard(props: {
 												)}
 												text="are highly confident they can present themselves professionally as a Virtual Assistant."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(
@@ -1242,7 +1255,7 @@ export default async function Dashboard(props: {
 												)}
 												text="feel fully prepared to communicate effectively and manage time in a professional setting."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(
@@ -1251,49 +1264,49 @@ export default async function Dashboard(props: {
 												)}
 												text="are confident they can respond to real workplace scenarios with clear, structured thinking."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_digital_tools')}
 												text="feel highly capable of using digital tools like Google Workspace to manage workflows."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_core_tasks')}
 												text="are ready to complete core tasks like research, scheduling, and admin support."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_present_work')}
 												text="feel highly confident presenting their work clearly through structured outputs."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_apply_jobs')}
 												text="are fully confident applying for remote jobs or freelance opportunities."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_pitch_skills')}
 												text="feel prepared to pitch their skills and attract potential clients or employers."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_identify_niche')}
 												text="are confident they can identify a specific VA niche and create an action plan."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 											<InsightRow
 												pct={calcTopBox(entries, 'skill_va_build_portfolio')}
 												text="feel completely ready to build a professional portfolio and use AI tools responsibly."
 												isDark={isDark}
-												t={t}
+												t={themeStyle}
 											/>
 										</>
 									)}
@@ -1305,61 +1318,61 @@ export default async function Dashboard(props: {
 										pct={calcTopBox(entries, 'overall_sat')}
 										text="are highly satisfied with their overall program experience."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'career_impact')}
 										text="feel the program was highly effective in enhancing their skills and advancing their careers."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_events')}
 										text="say community events kept them motivated, engaged, and on track to complete the program."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_peers')}
 										text="felt well-supported and motivated by their peers throughout their learning journey."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_mentors')}
 										text="state that Program Team support contributed meaningfully to their learning."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_lea')}
 										text="found the LEA AI Assistant easily accessible and highly useful when facing challenges."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_chidi')}
 										text="relied on Chidi AI to successfully navigate and overcome learning content challenges."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_prog_team')}
 										text="received timely and helpful guidance from the Program Team communications."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_peerfinder')}
 										text="successfully used the PeerFinder tool to connect with peers for collaboration."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 									<InsightRow
 										pct={calcTopBox(entries, 'supp_hub')}
 										text="found the Program Guides and Resources Hub essential for supporting their journey."
 										isDark={isDark}
-										t={t}
+										t={themeStyle}
 									/>
 								</>
 							)}
