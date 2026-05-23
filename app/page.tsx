@@ -6,10 +6,12 @@ import { date } from './utils/constants/date';
 import Link from 'next/link';
 import { getDate } from './utils/date';
 import { Days_One } from 'next/font/google';
+import jobsService from './services/jobs';
+import aiSummariesService from './services/ai-summaries';
+import eventsService from './services/events';
+import csatService from './services/csat';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = supabaseConfig;
 
 // ─── REPLACE THIS WITH YOUR RENDER SERVICE URL ───────────────────────────────
 const RENDER_BACKEND_URL = config.renderBackendUrl;
@@ -37,6 +39,11 @@ export default async function Dashboard(props: {
 
 	const themeStyle = getThemeStyle(isDark);
 
+	const { fetchEventJobStatus } = jobsService();
+	const { fetchAISummaries } = aiSummariesService();
+	const { getLatestEvent, getTotalEvents } = eventsService();
+	const { getCsatStats } = csatService();
+
 	const tabDisplayMap: Record<string, string> = {
 		onboarding: 'Onboarding',
 		community: 'Community Events',
@@ -47,89 +54,39 @@ export default async function Dashboard(props: {
 	const { startDate, endDate, reportPeriod } = getDate(year, month, quarter);
 	const { quarterMonths } = date;
 
-	const tableMap: Record<string, string> = {
-		onboarding: 'survey_onboarding',
-		community: 'survey_events',
-		support: 'survey_events',
-		eop: 'survey_eop',
-	};
-	let uniqueEvents: string[] = [];
-	let latestEvent = '';
-
-	if (activeTab === 'community' || activeTab === 'support') {
-		const eventTypeStr =
-			activeTab === 'community' ? 'Community Event' : 'Program Team';
-		const allEventsQuery = await supabase
-			.from(tableMap[activeTab])
-			.select('event_name_date, created_at')
-			.eq('program', program)
-			.gte('created_at', startDate)
-			.lte('created_at', endDate)
-			.eq('event_type', eventTypeStr)
-			.order('created_at', { ascending: false })
-			.limit(10000);
-		if (allEventsQuery.data) {
-			const seen = new Set();
-			for (const item of allEventsQuery.data) {
-				if (item.event_name_date && !seen.has(item.event_name_date)) {
-					seen.add(item.event_name_date);
-					uniqueEvents.push(item.event_name_date);
-				}
-			}
-			if (uniqueEvents.length > 0) latestEvent = uniqueEvents[0];
-		}
-	}
+	const { latestEvent, uniqueEvents } = await getLatestEvent(
+		activeTab,
+		program,
+		startDate,
+		endDate
+	);
 
 	const activeEvent =
 		selectedEvent === 'All' && latestEvent ? latestEvent : selectedEvent;
 
-	let query = supabase
-		.from(tableMap[activeTab])
-		.select('*')
-		.eq('program', program)
-		.gte('created_at', startDate)
-		.lte('created_at', endDate)
-		.limit(10000);
-	if (activeTab === 'community')
-		query = query.eq('event_type', 'Community Event');
-	if (activeTab === 'support') query = query.eq('event_type', 'Program Team');
-	if (
-		(activeTab === 'community' || activeTab === 'support') &&
-		activeEvent &&
-		activeEvent !== 'All'
-	)
-		query = query.eq('event_name_date', activeEvent);
-
-	const { data: entries } = await query;
-	const total = entries?.length || 0;
+	const { total, entries } = await getTotalEvents(
+		activeTab,
+		activeEvent,
+		program,
+		startDate,
+		endDate
+	);
 
 	// ── Fetch AI summaries ──────────────────────────────────────────────────────
-	let summaryQuery = supabase
-		.from('ai_thematic_summaries')
-		.select('*')
-		.eq('program', program)
-		.eq('tab_name', activeTab);
-	if (activeTab === 'onboarding' || activeTab === 'eop')
-		summaryQuery = summaryQuery.eq('report_period', reportPeriod);
-	else summaryQuery = summaryQuery.eq('event_name_date', activeEvent);
-	const { data: aiSummaries } = await summaryQuery
-		.order('created_at', { ascending: false })
-		.limit(6);
+	const aiSummaries = await fetchAISummaries(
+		activeTab,
+		program,
+		reportPeriod,
+		activeEvent
+	);
 
 	// ── Fetch job status for this exact context ─────────────────────────────────
-	const jobKey =
-		activeTab === 'community' || activeTab === 'support'
-			? `${program}|${activeTab}|${activeEvent}`
-			: `${program}|${activeTab}|${reportPeriod}`;
-
-	const { data: jobRow } = await supabase
-		.from('ai_summary_jobs')
-		.select('status, error_message')
-		.eq('job_key', jobKey)
-		.maybeSingle();
-
-	const jobStatus = jobRow?.status as 'busy' | 'done' | 'failed' | null;
-	const jobError = jobRow?.error_message as string | null;
+	const { jobError, jobStatus } = await fetchEventJobStatus(
+		activeTab,
+		program,
+		activeEvent,
+		reportPeriod
+	);
 
 	// ── Payload for the Render trigger (passed to the client component) ──────────
 	const summaryPayload = {
@@ -150,24 +107,12 @@ export default async function Dashboard(props: {
 	// For community/support: divide by respondents who actually answered the CSAT question,
 	// not total attendees (many attend without submitting the survey poll).
 	// For onboarding/eop: every row IS a survey response so total is correct.
-	const csatRespondents =
-		activeTab === 'community' || activeTab === 'support'
-			? entries?.filter(
-					(e) => e[csatCol!] !== null && e[csatCol!] !== undefined
-			  ).length || 0
-			: total;
-	const csatVal =
-		csatRespondents > 0
-			? (
-					((entries?.filter((e) => e[csatCol!] >= 4).length || 0) /
-						csatRespondents) *
-					100
-			  ).toFixed(1)
-			: '0.0';
-	const avgAttendance =
-		activeTab === 'community' || activeTab === 'support'
-			? calc(entries, 'attendance_duration_mins')
-			: '0';
+	const { csatVal, avgAttendance } = await getCsatStats(
+		activeTab,
+		csatCol,
+		entries,
+		total
+	);
 
 	return (
 		<div
