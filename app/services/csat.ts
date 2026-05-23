@@ -4,6 +4,7 @@ function csatService() {
 	const getCsatStats = async (
 		activeTab: string,
 		csatCol: string | undefined,
+		// TODO: define entries type better
 		entries: any[] | null,
 		total: number
 	) => {

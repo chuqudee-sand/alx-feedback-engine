@@ -110,6 +110,7 @@ export default async function Dashboard(props: {
 	const { csatVal, avgAttendance } = await getCsatStats(
 		activeTab,
 		csatCol,
+		// TODO: find better name for entries
 		entries,
 		total
 	);
