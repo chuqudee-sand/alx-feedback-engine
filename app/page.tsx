@@ -244,7 +244,47 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
               </>
             )}
             {activeTab === 'eop' && (
-              <><Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} type="sat" isDark={isDark} t={t} /><Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} type="help" isDark={isDark} t={t} /><Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} type="agree" isDark={isDark} t={t} /><Metric label="PEER SUPPORT" val={calc(entries, 'supp_peers')} type="agree" isDark={isDark} t={t} /><Metric label="PROGRAM TEAM SUPPORT" val={calc(entries, 'supp_mentors')} type="agree" isDark={isDark} t={t} /><Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} type="agree" isDark={isDark} t={t} /><Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} type="agree" isDark={isDark} t={t} /><Metric label="PROGRAM TEAM COMMS" val={calc(entries, 'supp_prog_team')} type="agree" isDark={isDark} t={t} /><Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} type="agree" isDark={isDark} t={t} /><Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} type="agree" isDark={isDark} t={t} /></>
+              <>
+                <Metric label="OVERALL EXPERIENCE" val={calc(entries, 'overall_sat')} type="sat" isDark={isDark} t={t} />
+                <Metric label="CAREER IMPACT" val={calc(entries, 'career_impact')} type="help" isDark={isDark} t={t} />
+                <Metric label="COMMUNITY EVENTS" val={calc(entries, 'supp_events')} type="agree" isDark={isDark} t={t} />
+                <Metric label="LEARNER SUPPORT SESSIONS" val={calc(entries, 'supp_mentors')} type="agree" isDark={isDark} t={t} />
+                <Metric label="PEERFINDER APP" val={calc(entries, 'supp_peerfinder')} type="agree" isDark={isDark} t={t} />
+                <Metric label="COMMUNITY AMBASSADORS" val={calc(entries, 'supp_peers')} type="agree" isDark={isDark} t={t} />
+                <Metric label="EMAIL COMMS" val={calc(entries, 'supp_prog_team')} type="agree" isDark={isDark} t={t} />
+                <Metric label="CIRCLE COMMS" val={calc(entries, 'supp_circle')} type="agree" isDark={isDark} t={t} />
+                <Metric label="LEA (AI ASSISTANT)" val={calc(entries, 'supp_lea')} type="agree" isDark={isDark} t={t} />
+                <Metric label="CHIDI (AI ASSISTANT)" val={calc(entries, 'supp_chidi')} type="agree" isDark={isDark} t={t} />
+                <Metric label="RESOURCES HUB" val={calc(entries, 'supp_hub')} type="agree" isDark={isDark} t={t} />
+                {/* EOP Skills Assessment — program-specific */}
+                <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t" style={{ borderColor: t.cardBorder }}>
+                  <h4 className="text-xs font-black uppercase tracking-[0.1em] mb-4" style={{ color: t.textMuted }}>EOP SKILLS CONFIDENCE ASSESSMENT</h4>
+                </div>
+                {program === 'AiCE' && (
+                  <>
+                    <Metric label="CAN EXPLAIN AI CONCEPTS" val={calc(entries, 'skill_explain_ai')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN WRITE CLEAR PROMPTS" val={calc(entries, 'skill_write_prompts')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN EVALUATE AI ETHICS" val={calc(entries, 'skill_evaluate_ethics')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN CREATE AI CONTENT" val={calc(entries, 'skill_create_content')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN IDENTIFY DATA PATTERNS" val={calc(entries, 'skill_identify_patterns')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAN BUILD AI PORTFOLIO" val={calc(entries, 'skill_build_portfolio')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Virtual Assistant' && (
+                  <>
+                    <Metric label="PRESENT PROFESSIONALLY AS VA" val={calc(entries, 'skill_va_present_professionally')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COMMUNICATE & MANAGE TIME" val={calc(entries, 'skill_va_communicate_effectively')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="RESPOND TO WORKPLACE SCENARIOS" val={calc(entries, 'skill_va_workplace_scenarios')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE DIGITAL TOOLS EFFICIENTLY" val={calc(entries, 'skill_va_digital_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COMPLETE CORE VA TASKS" val={calc(entries, 'skill_va_core_tasks')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PRESENT WORK CLEARLY" val={calc(entries, 'skill_va_present_work')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="APPLY FOR REMOTE JOBS" val={calc(entries, 'skill_va_apply_jobs')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PITCH SKILLS TO CLIENTS" val={calc(entries, 'skill_va_pitch_skills')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="IDENTIFY A NICHE" val={calc(entries, 'skill_va_identify_niche')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUILD PROFESSIONAL PORTFOLIO" val={calc(entries, 'skill_va_build_portfolio')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+              </>
             )}
             {(activeTab === 'community' || activeTab === 'support') && <Metric label="SESSION QUALITY RATING" val={calc(entries, 'session_quality_csat')} type="quality" isDark={isDark} t={t} />}
           </div>
@@ -394,7 +434,43 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                 </>
               )}
               {activeTab === 'eop' && (
-                <><InsightRow pct={calcTopBox(entries, 'overall_sat')} text="are highly satisfied with their overall program experience." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'career_impact')} text="feel the program was highly effective in enhancing their skills and advancing their careers." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_events')} text="say community events kept them motivated, engaged, and on track to complete the program." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_peers')} text="felt well-supported and motivated by their peers throughout their learning journey." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_mentors')} text="state that Program Team support contributed meaningfully to their learning." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_lea')} text="found the LEA AI Assistant easily accessible and highly useful when facing challenges." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_chidi')} text="relied on Chidi AI to successfully navigate and overcome learning content challenges." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_prog_team')} text="received timely and helpful guidance from the Program Team communications." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_peerfinder')} text="successfully used the PeerFinder tool to connect with peers for collaboration." isDark={isDark} t={t} /><InsightRow pct={calcTopBox(entries, 'supp_hub')} text="found the Program Guides and Resources Hub essential for supporting their journey." isDark={isDark} t={t} /></>
+                <>
+                  <InsightRow pct={calcTopBox(entries, 'overall_sat')} text="are highly satisfied with their overall program experience." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'career_impact')} text="feel the program was highly effective in enhancing their skills and advancing their careers." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_events')} text="say community events kept them motivated, engaged, and on track to complete the program." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_mentors')} text="found learner support sessions contributed meaningfully to their learning journey." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_peers')} text="felt well-supported by Community Ambassadors throughout their learning journey." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_lea')} text="found the LEA AI Assistant easily accessible and highly useful when facing challenges." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_chidi')} text="relied on Chidi AI to successfully navigate and overcome learning content challenges." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_prog_team')} text="found email communications clear, timely, and helpful for staying on top of their learning." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_circle')} text="say Circle community communications kept them informed and engaged." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_peerfinder')} text="successfully used the PeerFinder tool to connect with peers for collaboration." isDark={isDark} t={t} />
+                  <InsightRow pct={calcTopBox(entries, 'supp_hub')} text="found the Program Guides and Resources Hub essential for supporting their journey." isDark={isDark} t={t} />
+                  {program === 'AiCE' && (
+                    <>
+                      <InsightRow pct={calcTopBox(entries, 'skill_explain_ai')} text="feel highly confident explaining AI concepts and how AI systems work." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_write_prompts')} text="are confident writing goal-oriented prompts to guide AI tools for quality results." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_evaluate_ethics')} text="feel capable of evaluating an AI tool against core ethical principles." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_create_content')} text="are confident using generative AI to create professional text and multimedia content." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_identify_patterns')} text="can use AI tools to identify data patterns and communicate findings visually." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_build_portfolio')} text="feel ready to build and publish an AI-powered professional portfolio." isDark={isDark} t={t} />
+                    </>
+                  )}
+                  {program === 'Virtual Assistant' && (
+                    <>
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_present_professionally')} text="are highly confident they can present themselves professionally as a Virtual Assistant." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_communicate_effectively')} text="feel prepared to communicate effectively and manage time in a professional setting." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_workplace_scenarios')} text="are confident responding to real workplace scenarios with clear, structured thinking." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_digital_tools')} text="feel capable of using digital tools like Google Workspace to manage workflows." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_core_tasks')} text="are ready to complete core tasks like research, scheduling, and admin support." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_present_work')} text="feel confident presenting their work clearly through structured outputs." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_apply_jobs')} text="are fully confident applying for remote jobs or freelance opportunities." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_pitch_skills')} text="feel prepared to pitch their skills and attract potential clients or employers." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_identify_niche')} text="are confident they can identify a specific VA niche and create a career action plan." isDark={isDark} t={t} />
+                      <InsightRow pct={calcTopBox(entries, 'skill_va_build_portfolio')} text="feel completely ready to build a professional portfolio and use AI tools responsibly." isDark={isDark} t={t} />
+                    </>
+                  )}
+                </>
               )}
             </div>
           </section>
