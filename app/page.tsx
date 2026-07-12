@@ -113,7 +113,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
       <aside className="w-80 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-20" style={{ backgroundColor: t.sidebar }}>
         <div><h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">FEEDBACK ANALYSIS</h1><div className="h-1 w-12" style={{ backgroundColor: colors.springGreen }} /></div>
         <nav className="flex flex-col gap-2">
-          {['AiCE', 'Virtual Assistant', 'Professional Foundations'].map(p => (
+          {['AiCE', 'Virtual Assistant', 'Professional Foundations', 'Data Analytics', 'Content Creation', 'Graphic Design', 'Freelancer Academy', 'Founders Academy', 'Data Science', 'Data Engineering', 'Cyber Security', 'Software Engineering'].map(p => (
             <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`} className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border-l-4 ${program === p ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`} style={{ borderColor: program === p ? colors.springGreen : 'transparent' }}>{p.toUpperCase()}</Link>
           ))}
         </nav>
