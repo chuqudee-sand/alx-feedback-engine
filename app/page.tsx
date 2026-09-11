@@ -241,6 +241,68 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                     <Metric label="BUILD PROFESSIONAL PORTFOLIO" val={calc(entries, 'skill_va_build_portfolio')} type="agree" isDark={isDark} t={t} />
                   </>
                 )}
+
+                {program === 'Data Analytics' && (
+                  <>
+                    <Metric label="BREAK DOWN BUSINESS PROBLEMS" val={calc(entries, 'skill_da_problem_breakdown')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ANALYSE DATASETS IN SPREADSHEETS" val={calc(entries, 'skill_da_spreadsheet_analysis')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE AI IN DATA WORKFLOW" val={calc(entries, 'skill_da_ai_workflow')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CREATE DATA VISUALISATIONS" val={calc(entries, 'skill_da_data_visualisation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="WRITE SQL QUERIES" val={calc(entries, 'skill_da_sql_basic')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ADVANCED SQL TECHNIQUES" val={calc(entries, 'skill_da_sql_advanced')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUILD POWER BI REPORTS" val={calc(entries, 'skill_da_powerbi')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN INTERACTIVE DASHBOARDS" val={calc(entries, 'skill_da_dashboard')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Content Creation' && (
+                  <>
+                    <Metric label="DEFINE CONTENT IDENTITY" val={calc(entries, 'skill_cc_content_identity')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PLAN, FILM & EDIT CONTENT" val={calc(entries, 'skill_cc_filming_editing')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE AI FOR CONTENT CREATION" val={calc(entries, 'skill_cc_ai_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ANIMATION & MOTION GRAPHICS" val={calc(entries, 'skill_cc_animation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="MONETISE CONTENT" val={calc(entries, 'skill_cc_monetisation')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Graphic Design' && (
+                  <>
+                    <Metric label="USE DESIGN SOFTWARE" val={calc(entries, 'skill_gd_design_software')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="APPLY DESIGN PRINCIPLES" val={calc(entries, 'skill_gd_design_principles')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN EFFECTIVE POSTERS" val={calc(entries, 'skill_gd_poster_design')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="TYPOGRAPHIC LAYOUTS" val={calc(entries, 'skill_gd_typography')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="MULTI-PAGE LAYOUTS" val={calc(entries, 'skill_gd_multi_page_layout')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PLATFORM-SPECIFIC CONTENT" val={calc(entries, 'skill_gd_platform_content')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BRAND STRATEGY" val={calc(entries, 'skill_gd_brand_strategy')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="AI IN DESIGN PROCESS" val={calc(entries, 'skill_gd_ai_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN PORTFOLIO" val={calc(entries, 'skill_gd_portfolio')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="READY TO FREELANCE" val={calc(entries, 'skill_gd_freelance_ready')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Freelancer Academy' && (
+                  <>
+                    <Metric label="FREELANCE POSITIONING" val={calc(entries, 'skill_fla_freelance_positioning')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BRAND IDENTITY" val={calc(entries, 'skill_fla_brand_identity')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUSINESS SYSTEMS" val={calc(entries, 'skill_fla_business_systems')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PORTFOLIO & ONLINE PROFILE" val={calc(entries, 'skill_fla_portfolio_profile')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CLIENT ACQUISITION" val={calc(entries, 'skill_fla_client_acquisition')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PROJECT PROCESS" val={calc(entries, 'skill_fla_project_process')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Professional Foundations' && (
+                  <>
+                    <Metric label="SELF-AWARENESS" val={calc(entries, 'skill_pf_self_awareness')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="SELF-DISCIPLINE" val={calc(entries, 'skill_pf_self_discipline')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PROBLEM BREAKDOWN" val={calc(entries, 'skill_pf_problem_breakdown')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DATA REASONING" val={calc(entries, 'skill_pf_data_reasoning')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="WRITTEN COMMUNICATION" val={calc(entries, 'skill_pf_written_communication')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PRESENTATION SKILLS" val={calc(entries, 'skill_pf_presentation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COLLABORATION" val={calc(entries, 'skill_pf_collaboration')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ACCOUNTABILITY" val={calc(entries, 'skill_pf_accountability')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USER EMPATHY" val={calc(entries, 'skill_pf_user_empathy')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ITERATIVE THINKING" val={calc(entries, 'skill_pf_iterative_thinking')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="VALUE ARTICULATION" val={calc(entries, 'skill_pf_value_articulation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CAREER DIRECTION" val={calc(entries, 'skill_pf_career_direction')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
               </>
             )}
             {activeTab === 'eop' && (
@@ -284,7 +346,66 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                     <Metric label="BUILD PROFESSIONAL PORTFOLIO" val={calc(entries, 'skill_va_build_portfolio')} type="agree" isDark={isDark} t={t} />
                   </>
                 )}
-                {program === 'Professional Foundations' && (<><Metric label="SELF-AWARENESS" val={calc(entries, 'skill_pf_self_awareness')} type="agree" isDark={isDark} t={t} /><Metric label="SELF-DISCIPLINE" val={calc(entries, 'skill_pf_self_discipline')} type="agree" isDark={isDark} t={t} /><Metric label="PROBLEM BREAKDOWN" val={calc(entries, 'skill_pf_problem_breakdown')} type="agree" isDark={isDark} t={t} /><Metric label="DATA REASONING" val={calc(entries, 'skill_pf_data_reasoning')} type="agree" isDark={isDark} t={t} /><Metric label="WRITTEN COMMUNICATION" val={calc(entries, 'skill_pf_written_communication')} type="agree" isDark={isDark} t={t} /><Metric label="PRESENTATION SKILLS" val={calc(entries, 'skill_pf_presentation')} type="agree" isDark={isDark} t={t} /><Metric label="COLLABORATION" val={calc(entries, 'skill_pf_collaboration')} type="agree" isDark={isDark} t={t} /><Metric label="ACCOUNTABILITY" val={calc(entries, 'skill_pf_accountability')} type="agree" isDark={isDark} t={t} /><Metric label="USER EMPATHY" val={calc(entries, 'skill_pf_user_empathy')} type="agree" isDark={isDark} t={t} /><Metric label="ITERATIVE THINKING" val={calc(entries, 'skill_pf_iterative_thinking')} type="agree" isDark={isDark} t={t} /></>)}
+
+                {program === 'Data Analytics' && (
+                  <>
+                    <Metric label="BREAK DOWN BUSINESS PROBLEMS" val={calc(entries, 'skill_da_problem_breakdown')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ANALYSE DATASETS IN SPREADSHEETS" val={calc(entries, 'skill_da_spreadsheet_analysis')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE AI IN DATA WORKFLOW" val={calc(entries, 'skill_da_ai_workflow')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CREATE DATA VISUALISATIONS" val={calc(entries, 'skill_da_data_visualisation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="WRITE SQL QUERIES" val={calc(entries, 'skill_da_sql_basic')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ADVANCED SQL TECHNIQUES" val={calc(entries, 'skill_da_sql_advanced')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUILD POWER BI REPORTS" val={calc(entries, 'skill_da_powerbi')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN INTERACTIVE DASHBOARDS" val={calc(entries, 'skill_da_dashboard')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Content Creation' && (
+                  <>
+                    <Metric label="DEFINE CONTENT IDENTITY" val={calc(entries, 'skill_cc_content_identity')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PLAN, FILM & EDIT CONTENT" val={calc(entries, 'skill_cc_filming_editing')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USE AI FOR CONTENT CREATION" val={calc(entries, 'skill_cc_ai_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ANIMATION & MOTION GRAPHICS" val={calc(entries, 'skill_cc_animation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="MONETISE CONTENT" val={calc(entries, 'skill_cc_monetisation')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Graphic Design' && (
+                  <>
+                    <Metric label="USE DESIGN SOFTWARE" val={calc(entries, 'skill_gd_design_software')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="APPLY DESIGN PRINCIPLES" val={calc(entries, 'skill_gd_design_principles')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN EFFECTIVE POSTERS" val={calc(entries, 'skill_gd_poster_design')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="TYPOGRAPHIC LAYOUTS" val={calc(entries, 'skill_gd_typography')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="MULTI-PAGE LAYOUTS" val={calc(entries, 'skill_gd_multi_page_layout')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PLATFORM-SPECIFIC CONTENT" val={calc(entries, 'skill_gd_platform_content')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BRAND STRATEGY" val={calc(entries, 'skill_gd_brand_strategy')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="AI IN DESIGN PROCESS" val={calc(entries, 'skill_gd_ai_tools')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DESIGN PORTFOLIO" val={calc(entries, 'skill_gd_portfolio')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="READY TO FREELANCE" val={calc(entries, 'skill_gd_freelance_ready')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Freelancer Academy' && (
+                  <>
+                    <Metric label="FREELANCE POSITIONING" val={calc(entries, 'skill_fla_freelance_positioning')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BRAND IDENTITY" val={calc(entries, 'skill_fla_brand_identity')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="BUSINESS SYSTEMS" val={calc(entries, 'skill_fla_business_systems')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PORTFOLIO & ONLINE PROFILE" val={calc(entries, 'skill_fla_portfolio_profile')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="CLIENT ACQUISITION" val={calc(entries, 'skill_fla_client_acquisition')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PROJECT PROCESS" val={calc(entries, 'skill_fla_project_process')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
+                {program === 'Professional Foundations' && (
+                  <>
+                    <Metric label="SELF-AWARENESS" val={calc(entries, 'skill_pf_self_awareness')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="SELF-DISCIPLINE" val={calc(entries, 'skill_pf_self_discipline')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PROBLEM BREAKDOWN" val={calc(entries, 'skill_pf_problem_breakdown')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="DATA REASONING" val={calc(entries, 'skill_pf_data_reasoning')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="WRITTEN COMMUNICATION" val={calc(entries, 'skill_pf_written_communication')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="PRESENTATION SKILLS" val={calc(entries, 'skill_pf_presentation')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="COLLABORATION" val={calc(entries, 'skill_pf_collaboration')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ACCOUNTABILITY" val={calc(entries, 'skill_pf_accountability')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="USER EMPATHY" val={calc(entries, 'skill_pf_user_empathy')} type="agree" isDark={isDark} t={t} />
+                    <Metric label="ITERATIVE THINKING" val={calc(entries, 'skill_pf_iterative_thinking')} type="agree" isDark={isDark} t={t} />
+                  </>
+                )}
               </>
             )}
             {(activeTab === 'community' || activeTab === 'support') && <Metric label="SESSION QUALITY RATING" val={calc(entries, 'session_quality_csat')} type="quality" isDark={isDark} t={t} />}
