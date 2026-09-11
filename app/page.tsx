@@ -94,7 +94,128 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   // ── Payload for the Render trigger (passed to the client component) ──────────
   const summaryPayload = { program, activeTab, startDate, endDate, activeEvent, reportPeriod };
 
-  const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
+  // ── Cross-Program Data Fetch (only when program === 'CROSS-PROGRAM') ──────────
+  let crossProgramData: Record<string, any> = {};
+  if (program === 'CROSS-PROGRAM') {
+    const allPrograms = ['AiCE', 'Virtual Assistant', 'Professional Foundations', 'Data Analytics', 'Content Creation', 'Graphic Design', 'Freelancer Academy'];
+
+    // Fetch onboarding data for all programs
+    const { data: obAll } = await supabase.from('survey_onboarding').select('program, sat_next_steps, clear_expectations, access_tech_mentors, connect_peers, help_platform_bugs, access_support_tools, know_pause_withdraw, comms_useful').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
+
+    // Fetch EOP data for all programs
+    const { data: eopAll } = await supabase.from('survey_eop').select('program, overall_sat, nps_score, career_impact, supp_events, supp_mentors, supp_mentors_sessions, supp_peerfinder, supp_peers, supp_prog_team, supp_circle, supp_lea, supp_chidi, supp_hub').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
+
+    // Fetch community events CSAT for all programs
+    const { data: eventsAll } = await supabase.from('survey_events').select('program, session_quality_csat').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
+
+    // Helper: average of a column per program, then average of those averages (excluding nulls/zeros)
+    const avgByProg = (data: any[], col: string) => {
+      const byProg: Record<string, number[]> = {};
+      (data || []).forEach(r => {
+        if (r[col] != null && r[col] > 0) {
+          if (!byProg[r.program]) byProg[r.program] = [];
+          byProg[r.program].push(r[col]);
+        }
+      });
+      const progAvgs = Object.values(byProg).map(vals => vals.reduce((a,b) => a+b,0)/vals.length);
+      return progAvgs.length > 0 ? progAvgs.reduce((a,b) => a+b,0)/progAvgs.length : null;
+    };
+
+    // CSAT % per program (onboarding: sat_next_steps ≥4, eop: overall_sat ≥4)
+    const csatByProg = (data: any[], col: string) => {
+      const byProg: Record<string, {total:number, high:number}> = {};
+      (data || []).forEach(r => {
+        if (r[col] != null) {
+          if (!byProg[r.program]) byProg[r.program] = {total:0, high:0};
+          byProg[r.program].total++;
+          if (r[col] >= 4) byProg[r.program].high++;
+        }
+      });
+      const progPcts = Object.values(byProg).filter(v => v.total > 0).map(v => v.high/v.total*100);
+      return progPcts.length > 0 ? (progPcts.reduce((a,b)=>a+b,0)/progPcts.length).toFixed(1) : null;
+    };
+
+    // NPS per program then average
+    const npsByProg = (data: any[]) => {
+      const byProg: Record<string, {p:number,d:number,total:number}> = {};
+      (data || []).forEach(r => {
+        if (r.nps_score != null) {
+          if (!byProg[r.program]) byProg[r.program] = {p:0,d:0,total:0};
+          byProg[r.program].total++;
+          if (r.nps_score >= 9) byProg[r.program].p++;
+          if (r.nps_score <= 6) byProg[r.program].d++;
+        }
+      });
+      const npsScores = Object.values(byProg).filter(v => v.total > 0).map(v => ((v.p/v.total)-(v.d/v.total))*100);
+      return npsScores.length > 0 ? Math.round(npsScores.reduce((a,b)=>a+b,0)/npsScores.length) : null;
+    };
+
+    crossProgramData = {
+      // Respondent counts
+      obCount:  (obAll  || []).length,
+      eopCount: (eopAll || []).length,
+      eventsCount: (eventsAll || []).length,
+
+      // Cross-program CSAT averages
+      obCsat:     csatByProg(obAll  || [], 'sat_next_steps'),
+      eopCsat:    csatByProg(eopAll || [], 'overall_sat'),
+      eventsCsat: csatByProg(eventsAll || [], 'session_quality_csat'),
+
+      // Cross-program NPS average (EOP only)
+      avgNps: npsByProg(eopAll || []),
+
+      // Onboarding pillar averages
+      ob_sat:            avgByProg(obAll || [], 'sat_next_steps'),
+      ob_expectations:   avgByProg(obAll || [], 'clear_expectations'),
+      ob_prog_team:      avgByProg(obAll || [], 'access_tech_mentors'),
+      ob_peers:          avgByProg(obAll || [], 'connect_peers'),
+      ob_bugs:           avgByProg(obAll || [], 'help_platform_bugs'),
+      ob_tools:          avgByProg(obAll || [], 'access_support_tools'),
+      ob_pause:          avgByProg(obAll || [], 'know_pause_withdraw'),
+      ob_comms:          avgByProg(obAll || [], 'comms_useful'),
+
+      // EOP pillar averages
+      eop_overall:       avgByProg(eopAll || [], 'overall_sat'),
+      eop_career:        avgByProg(eopAll || [], 'career_impact'),
+      eop_events:        avgByProg(eopAll || [], 'supp_events'),
+      eop_mentors:       avgByProg(eopAll || [], 'supp_mentors'),
+      eop_sessions:      avgByProg(eopAll || [], 'supp_mentors_sessions'),
+      eop_peerfinder:    avgByProg(eopAll || [], 'supp_peerfinder'),
+      eop_peers:         avgByProg(eopAll || [], 'supp_peers'),
+      eop_prog_team:     avgByProg(eopAll || [], 'supp_prog_team'),
+      eop_circle:        avgByProg(eopAll || [], 'supp_circle'),
+      eop_lea:           avgByProg(eopAll || [], 'supp_lea'),
+      eop_chidi:         avgByProg(eopAll || [], 'supp_chidi'),
+      eop_hub:           avgByProg(eopAll || [], 'supp_hub'),
+
+      // Program breakdown for CSAT bar
+      obPrograms: Object.fromEntries(
+        allPrograms.map(p => {
+          const rows = (obAll || []).filter(r => r.program === p && r.sat_next_steps != null);
+          if (!rows.length) return [p, null];
+          return [p, +(rows.filter(r => r.sat_next_steps >= 4).length / rows.length * 100).toFixed(1)];
+        }).filter(([,v]) => v !== null)
+      ),
+      eopPrograms: Object.fromEntries(
+        allPrograms.map(p => {
+          const rows = (eopAll || []).filter(r => r.program === p && r.overall_sat != null);
+          if (!rows.length) return [p, null];
+          return [p, +(rows.filter(r => r.overall_sat >= 4).length / rows.length * 100).toFixed(1)];
+        }).filter(([,v]) => v !== null)
+      ),
+      npsPrograms: Object.fromEntries(
+        allPrograms.map(p => {
+          const rows = (eopAll || []).filter(r => r.program === p && r.nps_score != null);
+          if (!rows.length) return [p, null];
+          const promoters = rows.filter(r => r.nps_score >= 9).length;
+          const detractors = rows.filter(r => r.nps_score <= 6).length;
+          return [p, Math.round((promoters/rows.length - detractors/rows.length)*100)];
+        }).filter(([,v]) => v !== null)
+      ),
+    };
+  }
+
+    const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
   // For community/support: divide by respondents who actually answered the CSAT question,
   // not total attendees (many attend without submitting the survey poll).
   // For onboarding/eop: every row IS a survey response so total is correct.
@@ -113,12 +234,26 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
       <aside className="w-80 p-8 flex flex-col gap-10 text-white shadow-2xl relative z-20" style={{ backgroundColor: t.sidebar }}>
         <div><h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">FEEDBACK ANALYSIS</h1><div className="h-1 w-12" style={{ backgroundColor: colors.springGreen }} /></div>
         <nav className="flex flex-col gap-2">
+          {/* Cross-Program — visually distinct entry */}
+          <Link href={`/?program=CROSS-PROGRAM&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`}
+            className="px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 mt-1"
+            style={{
+              background: program === 'CROSS-PROGRAM'
+                ? 'linear-gradient(135deg, #05F283 0%, #27DEF2 100%)'
+                : 'linear-gradient(135deg, rgba(5,242,131,0.15) 0%, rgba(39,222,242,0.15) 100%)',
+              color: program === 'CROSS-PROGRAM' ? colors.berkeleyBlue : colors.springGreen,
+              border: '1px solid rgba(5,242,131,0.4)',
+            }}>
+            <span>⊞</span> CROSS-PROGRAM
+          </Link>
+          <div className="h-px my-1" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} />
           {['AiCE', 'Virtual Assistant', 'Professional Foundations', 'Data Analytics', 'Content Creation', 'Graphic Design', 'Freelancer Academy', 'Founders Academy', 'Data Science', 'Data Engineering', 'Cyber Security', 'Software Engineering'].map(p => (
             <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`} className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border-l-4 ${program === p ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`} style={{ borderColor: program === p ? colors.springGreen : 'transparent' }}>{p.toUpperCase()}</Link>
           ))}
         </nav>
       </aside>
 
+      {program !== 'CROSS-PROGRAM' && (
       <main className="flex-1 p-10 overflow-y-auto relative z-10">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
@@ -606,7 +741,139 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
         )}
+      {/* ── CROSS-PROGRAM VIEW ──────────────────────────────────────────── */}
+      {program === 'CROSS-PROGRAM' && (
+        <main className="flex-1 p-10 overflow-y-auto relative z-10">
+          <header className="mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
+            <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight" style={{
+              background: 'linear-gradient(135deg, #05F283 0%, #27DEF2 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+            }}>CROSS-PROGRAM</h2>
+            <p className="text-lg italic font-medium" style={{ color: t.textMuted }}>
+              Average metrics across all active programs — {month === 'All' ? `Full ${quarter}` : month} {year}
+            </p>
+          </header>
+
+          {/* ── Period selector (reuses existing UI) ── */}
+          <div className="flex flex-col items-end gap-3 mb-10">
+            <div className="flex gap-2 items-center">
+              <div className="flex p-1 rounded-xl shadow-inner" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,43,86,0.05)' }}>
+                {['2025', '2026'].map(y => (
+                  <Link key={y} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${y}&quarter=${quarter}&month=All&theme=${theme}`}
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${year === y ? 'shadow-sm' : 'hover:opacity-70'}`}
+                    style={{ backgroundColor: year === y ? t.cardBg : 'transparent', color: year === y ? t.textMain : t.textMuted }}>{y}</Link>
+                ))}
+              </div>
+              <div className="flex p-1 rounded-xl shadow-inner" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,43,86,0.05)' }}>
+                {['S1', 'S2', 'S3'].map(q => (
+                  <Link key={q} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${q}&month=All&theme=${theme}`}
+                    className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'shadow-sm' : 'hover:opacity-70'}`}
+                    style={{ backgroundColor: quarter === q ? t.cardBg : 'transparent', color: quarter === q ? t.textMain : t.textMuted }}>{q}</Link>
+                ))}
+              </div>
+              <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
+                <Link href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
+                  style={{ backgroundColor: month === 'All' ? colors.berkeleyBlue : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>FULL {quarter}</Link>
+                {quarterMonths[quarter].map(m => (
+                  <Link key={m.val} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
+                    style={{ backgroundColor: month === m.val ? colors.berkeleyBlue : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>{m.name.toUpperCase()}</Link>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Top stat cards ── */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
+            <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
+            <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? crossProgramData.avgNps : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
+            <StatCard label="TOTAL RESPONDENTS" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
+          </div>
+
+          {/* ── Per-program CSAT breakdown ── */}
+          <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: t.textMain, borderColor: t.cardBorder }}>
+              CSAT % BY PROGRAM <span className="text-[10px] normal-case tracking-normal opacity-60 ml-2">(% scoring 4–5, programs with no data excluded)</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-2">
+              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: colors.springGreen }}>ONBOARDING CSAT</div>
+              {Object.entries(crossProgramData.obPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, pct]) => (
+                <CrossMetricBar key={prog} label={prog} value={pct as number} isDark={isDark} t={t} />
+              ))}
+              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.turquoise }}>END OF PROGRAM CSAT</div>
+              {Object.entries(crossProgramData.eopPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, pct]) => (
+                <CrossMetricBar key={prog} label={prog} value={pct as number} isDark={isDark} t={t} />
+              ))}
+              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.electricBlue }}>NPS BY PROGRAM</div>
+              {Object.entries(crossProgramData.npsPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, score]) => (
+                <CrossNpsBar key={prog} label={prog} value={score as number} isDark={isDark} t={t} />
+              ))}
+            </div>
+          </section>
+
+          {/* ── Onboarding pillar averages ── */}
+          <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
+              AVG ONBOARDING PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
+              {crossProgramData.ob_sat        != null && <Metric label="ONBOARDING SATISFACTION"    val={crossProgramData.ob_sat.toFixed(1)}          type="sat"   isDark={isDark} t={t} />}
+              {crossProgramData.ob_expectations != null && <Metric label="PROGRAM EXPECTATION CLARITY" val={crossProgramData.ob_expectations.toFixed(1)}  type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_prog_team   != null && <Metric label="ACCESS TO PROGRAM TEAM"    val={crossProgramData.ob_prog_team.toFixed(1)}       type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_peers       != null && <Metric label="CONNECT WITH PEERS"        val={crossProgramData.ob_peers.toFixed(1)}           type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_bugs        != null && <Metric label="PLATFORM BUG AWARENESS"    val={crossProgramData.ob_bugs.toFixed(1)}            type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_tools       != null && <Metric label="SUPPORT TOOL CLARITY"      val={crossProgramData.ob_tools.toFixed(1)}           type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_pause       != null && <Metric label="PAUSE/WITHDRAW CLARITY"    val={crossProgramData.ob_pause.toFixed(1)}           type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.ob_comms       != null && <Metric label="COMMS CLARITY & USEFULNESS" val={crossProgramData.ob_comms.toFixed(1)}          type="help"  isDark={isDark} t={t} />}
+            </div>
+          </section>
+
+          {/* ── EOP pillar averages ── */}
+          <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+            <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
+              AVG END OF PROGRAM PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
+              {crossProgramData.eop_overall  != null && <Metric label="OVERALL EXPERIENCE"        val={crossProgramData.eop_overall.toFixed(1)}   type="sat"   isDark={isDark} t={t} />}
+              {crossProgramData.eop_career   != null && <Metric label="CAREER IMPACT"             val={crossProgramData.eop_career.toFixed(1)}    type="help"  isDark={isDark} t={t} />}
+              {crossProgramData.eop_events   != null && <Metric label="COMMUNITY EVENTS"          val={crossProgramData.eop_events.toFixed(1)}    type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_mentors  != null && <Metric label="TECHNICAL MENTORS"         val={crossProgramData.eop_mentors.toFixed(1)}   type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_sessions != null && <Metric label="LEARNER SUPPORT SESSIONS"  val={crossProgramData.eop_sessions.toFixed(1)}  type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_peerfinder != null && <Metric label="PEERFINDER APP"          val={crossProgramData.eop_peerfinder.toFixed(1)} type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_peers    != null && <Metric label="COMMUNITY AMBASSADORS"     val={crossProgramData.eop_peers.toFixed(1)}     type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_prog_team != null && <Metric label="EMAIL COMMUNICATIONS"     val={crossProgramData.eop_prog_team.toFixed(1)} type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_circle   != null && <Metric label="CIRCLE COMMS"             val={crossProgramData.eop_circle.toFixed(1)}    type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_lea      != null && <Metric label="LEA (AI ASSISTANT)"        val={crossProgramData.eop_lea.toFixed(1)}       type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_chidi    != null && <Metric label="CHIDI (AI ASSISTANT)"      val={crossProgramData.eop_chidi.toFixed(1)}     type="agree" isDark={isDark} t={t} />}
+              {crossProgramData.eop_hub      != null && <Metric label="RESOURCES HUB"             val={crossProgramData.eop_hub.toFixed(1)}       type="agree" isDark={isDark} t={t} />}
+            </div>
+          </section>
+
+          {/* ── Key Sentiment Insights (cross-program) ── */}
+          <section className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}>
+            <h3 className="text-2xl font-black mb-2 uppercase tracking-tight flex items-end gap-3" style={{ color: t.textMain }}>
+              CROSS-PROGRAM INSIGHTS <span className="text-sm normal-case tracking-normal opacity-70 mb-1">(top-box % averaged across all programs)</span>
+            </h3>
+            <p className="text-sm italic mb-8" style={{ color: t.textMuted }}>
+              Percentage of respondents scoring 4 or 5 — averaged across all programs with data for the selected period.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {crossProgramData.ob_sat        != null && <InsightRow pct={Math.round((crossProgramData.ob_sat / 5) * 100)} text="average onboarding satisfaction across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.ob_expectations != null && <InsightRow pct={Math.round((crossProgramData.ob_expectations / 5) * 100)} text="of learners understand program expectations across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.ob_peers       != null && <InsightRow pct={Math.round((crossProgramData.ob_peers / 5) * 100)} text="know how to connect with peers and Community Ambassadors." isDark={isDark} t={t} />}
+              {crossProgramData.ob_comms       != null && <InsightRow pct={Math.round((crossProgramData.ob_comms / 5) * 100)} text="found communications clear and useful across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.eop_overall    != null && <InsightRow pct={Math.round((crossProgramData.eop_overall / 5) * 100)} text="overall satisfaction at program completion across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.eop_career     != null && <InsightRow pct={Math.round((crossProgramData.eop_career / 5) * 100)} text="feel the program was effective in advancing their careers." isDark={isDark} t={t} />}
+              {crossProgramData.eop_lea        != null && <InsightRow pct={Math.round((crossProgramData.eop_lea / 5) * 100)} text="found LEA AI Assistant accessible and useful across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.eop_hub        != null && <InsightRow pct={Math.round((crossProgramData.eop_hub / 5) * 100)} text="found the Resources Hub essential for supporting their journey." isDark={isDark} t={t} />}
+            </div>
+          </section>
+        </main>
+      )}
       </main>
+      )} {/* end program !== CROSS-PROGRAM */}
     </div>
   );
 }
@@ -638,6 +905,31 @@ function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any
 }
 
 // ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+function CrossMetricBar({ label, value, isDark, t }: any) {
+  const color = value >= 80 ? colors.springGreen : value >= 60 ? colors.blueNCS : colors.gold;
+  return (
+    <div className="flex items-center gap-4 py-2">
+      <span className="text-[10px] font-black uppercase w-44 shrink-0 truncate" style={{ color: t.textMuted }}>{label}</span>
+      <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
+        <div style={{ width: `${value}%`, backgroundColor: color }} className="h-full rounded-full transition-all duration-700" />
+      </div>
+      <span className="text-sm font-black w-14 text-right" style={{ color }}>{value}%</span>
+    </div>
+  );
+}
+function CrossNpsBar({ label, value, isDark, t }: any) {
+  const color = value >= 30 ? colors.springGreen : value >= 0 ? colors.blueNCS : colors.tomato;
+  const barWidth = Math.min(100, Math.max(0, (value + 100) / 2)); // map -100..100 to 0..100%
+  return (
+    <div className="flex items-center gap-4 py-2">
+      <span className="text-[10px] font-black uppercase w-44 shrink-0 truncate" style={{ color: t.textMuted }}>{label}</span>
+      <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
+        <div style={{ width: `${barWidth}%`, backgroundColor: color }} className="h-full rounded-full transition-all duration-700" />
+      </div>
+      <span className="text-sm font-black w-14 text-right" style={{ color }}>{value > 0 ? '+' : ''}{value}</span>
+    </div>
+  );
+}
 function StatCard({ label, value, accent, isDark, t }: any) { return ( <div className="p-6 rounded-2xl shadow-lg border-t-4 hover:scale-105 transition-all duration-300 cursor-default" style={{ backgroundColor: t.cardBg, borderColor: accent }}> <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: t.textMuted }}>{label}</p> <h4 className="text-5xl font-black" style={{ color: t.textMain }}>{value}</h4> </div> ); }
 function getScaleLabel(val: number, type: string) { if (val >= 4.5) return type === 'agree' ? 'Strongly Agreed' : type === 'help' ? 'Very Helpful' : type === 'quality' ? 'Excellent' : 'Highly Satisfied'; if (val >= 3.9) return type === 'agree' ? 'Agreed' : type === 'help' ? 'Helpful' : type === 'quality' ? 'Very Good' : 'Satisfied'; if (val >= 3.3) return type === 'agree' ? 'Neither' : type === 'help' ? 'Moderate' : type === 'quality' ? 'Good' : 'Neutral'; if (val >= 2.0) return type === 'agree' ? 'Disagreed' : type === 'help' ? 'Unhelpful' : type === 'quality' ? 'Fair' : 'Dissatisfied'; return type === 'agree' ? 'Strongly Disagreed' : type === 'help' ? 'Very Unhelpful' : type === 'quality' ? 'Poor' : 'Very Dissatisfied'; }
 function Metric({ label, val, type = 'sat', isDark, t }: any) { const numVal = Number(val); const width = (numVal / 5) * 100; let finalColor = colors.tomato; if (numVal >= 4.5) finalColor = colors.springGreen; else if (numVal >= 3.9) finalColor = colors.blueNCS; else if (numVal >= 3.3) finalColor = colors.gold; const scaleText = getScaleLabel(numVal, type); return ( <div className="group p-3 rounded-xl hover:scale-[1.02] transition-all duration-300 cursor-default border border-transparent" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'transparent' }}> <div className="flex justify-between items-end mb-2"> <span className="text-[11px] font-black tracking-tight uppercase" style={{ color: t.textMuted }}>{label}</span> <div className="flex items-center gap-3"> <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: finalColor }}>{scaleText}</span> <span className="text-sm font-black" style={{ color: t.textMain }}>{val} / 5.0</span> </div> </div> <div className="h-6 rounded-full overflow-hidden shadow-inner p-0.5" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}> <div style={{ width: `${width}%`, backgroundColor: finalColor }} className="h-full rounded-full transition-all duration-700 shadow-sm" /> </div> </div> ); }
