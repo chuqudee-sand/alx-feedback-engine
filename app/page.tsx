@@ -904,7 +904,7 @@ function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any
   );
 }
 
-// ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+// ── HELPER FUNCTIONS ──────────────────────────────────────────────────────
 function CrossMetricBar({ label, value, isDark, t }: any) {
   const color = value >= 80 ? colors.springGreen : value >= 60 ? colors.blueNCS : colors.gold;
   return (
