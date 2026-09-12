@@ -893,7 +893,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
 
-          {/* ── Onboarding pillar averages ── */}}
+          {/* ── Onboarding pillar averages ── */}
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
               AVG ONBOARDING PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
