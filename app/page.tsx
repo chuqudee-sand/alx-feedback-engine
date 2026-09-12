@@ -253,8 +253,8 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
         </nav>
       </aside>
 
-      {program !== 'CROSS-PROGRAM' && (
       <main className="flex-1 p-10 overflow-y-auto relative z-10">
+        {program !== 'CROSS-PROGRAM' && (<>
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3" style={{ color: t.textMain }}>
@@ -741,6 +741,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
         )}
+        </>)}
+      </main>
+
       {/* ── CROSS-PROGRAM VIEW ──────────────────────────────────────────── */}
       {program === 'CROSS-PROGRAM' && (
         <main className="flex-1 p-10 overflow-y-auto relative z-10">
@@ -789,7 +792,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
             <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
             <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? crossProgramData.avgNps : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
-            <StatCard label="TOTAL RESPONDENTS" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
+            <StatCard label="TOTAL RESPONDENTS (ALL)" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
           </div>
 
           {/* ── Per-program CSAT breakdown ── */}
@@ -813,7 +816,84 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
 
-          {/* ── Onboarding pillar averages ── */}
+          {/* ── Bar chart: CSAT & NPS per program ── */}
+          <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+            <h3 className="text-xl font-black mb-2 uppercase tracking-tight" style={{ color: t.textMain }}>
+              CSAT & NPS COMPARISON CHART
+            </h3>
+            <p className="text-xs mb-8" style={{ color: t.textMuted }}>Onboarding CSAT %, EOP CSAT %, and NPS score per program for the selected period. Programs with no data are excluded.</p>
+            <div className="space-y-8">
+              {/* Onboarding CSAT bars */}
+              {Object.keys(crossProgramData.obPrograms || {}).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.springGreen }}>ONBOARDING CSAT %</p>
+                  <div className="space-y-3">
+                    {Object.entries(crossProgramData.obPrograms || {})
+                      .sort(([,a],[,b]) => (b as number) - (a as number))
+                      .map(([prog, pct]) => (
+                      <div key={prog} className="flex items-center gap-3">
+                        <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
+                        <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
+                          <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
+                            style={{ width: `${pct}%`, backgroundColor: (pct as number) >= 80 ? colors.springGreen : (pct as number) >= 60 ? colors.blueNCS : colors.gold }}>
+                            <span className="text-[9px] font-black text-white">{pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* EOP CSAT bars */}
+              {Object.keys(crossProgramData.eopPrograms || {}).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.turquoise }}>EOP CSAT %</p>
+                  <div className="space-y-3">
+                    {Object.entries(crossProgramData.eopPrograms || {})
+                      .sort(([,a],[,b]) => (b as number) - (a as number))
+                      .map(([prog, pct]) => (
+                      <div key={prog} className="flex items-center gap-3">
+                        <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
+                        <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
+                          <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
+                            style={{ width: `${pct}%`, backgroundColor: (pct as number) >= 80 ? colors.turquoise : (pct as number) >= 60 ? colors.blueNCS : colors.gold }}>
+                            <span className="text-[9px] font-black text-white">{pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* NPS bars */}
+              {Object.keys(crossProgramData.npsPrograms || {}).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.electricBlue }}>NPS SCORE (–100 to +100)</p>
+                  <div className="space-y-3">
+                    {Object.entries(crossProgramData.npsPrograms || {})
+                      .sort(([,a],[,b]) => (b as number) - (a as number))
+                      .map(([prog, score]) => {
+                        const barW = Math.min(100, Math.max(2, ((score as number) + 100) / 2));
+                        const col = (score as number) >= 30 ? colors.springGreen : (score as number) >= 0 ? colors.blueNCS : colors.tomato;
+                        return (
+                          <div key={prog} className="flex items-center gap-3">
+                            <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
+                            <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
+                              <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
+                                style={{ width: `${barW}%`, backgroundColor: col }}>
+                                <span className="text-[9px] font-black text-white">{(score as number) > 0 ? '+' : ''}{score}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── Onboarding pillar averages ── */}}
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
               AVG ONBOARDING PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
@@ -872,8 +952,6 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
           </section>
         </main>
       )}
-      </main>
-      )} {/* end program !== CROSS-PROGRAM */}
     </div>
   );
 }
@@ -904,7 +982,7 @@ function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any
   );
 }
 
-// ── HELPER FUNCTIONS ──────────────────────────────────────────────────────
+// ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 function CrossMetricBar({ label, value, isDark, t }: any) {
   const color = value >= 80 ? colors.springGreen : value >= 60 ? colors.blueNCS : colors.gold;
   return (
