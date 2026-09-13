@@ -150,6 +150,41 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
       return npsScores.length > 0 ? Math.round(npsScores.reduce((a,b)=>a+b,0)/npsScores.length) : null;
     };
 
+    // Monthly trend: fetch all years for the trend chart (not filtered by period)
+    const { data: obTrend  } = await supabase.from('survey_onboarding').select('created_at, sat_next_steps').limit(50000);
+    const { data: eopTrend } = await supabase.from('survey_eop').select('created_at, overall_sat, nps_score').limit(50000);
+
+    // Build monthly averages: CSAT % and NPS for each month across all programs
+    const buildMonthlyTrend = () => {
+      const months: Record<string, {csatHigh:number, csatTotal:number, npsP:number, npsD:number, npsTotal:number}> = {};
+      const getKey = (dateStr: string) => dateStr?.substring(0, 7); // "2026-07"
+
+      (obTrend || []).forEach(r => {
+        const k = getKey(r.created_at);
+        if (!k || !r.sat_next_steps) return;
+        if (!months[k]) months[k] = {csatHigh:0, csatTotal:0, npsP:0, npsD:0, npsTotal:0};
+        months[k].csatTotal++;
+        if (r.sat_next_steps >= 4) months[k].csatHigh++;
+      });
+      (eopTrend || []).forEach(r => {
+        const k = getKey(r.created_at);
+        if (!k) return;
+        if (!months[k]) months[k] = {csatHigh:0, csatTotal:0, npsP:0, npsD:0, npsTotal:0};
+        if (r.overall_sat) { months[k].csatTotal++; if (r.overall_sat >= 4) months[k].csatHigh++; }
+        if (r.nps_score)   { months[k].npsTotal++; if (r.nps_score >= 9) months[k].npsP++; if (r.nps_score <= 6) months[k].npsD++; }
+      });
+
+      return Object.entries(months)
+        .sort(([a],[b]) => a.localeCompare(b))
+        .map(([month, d]) => ({
+          month,
+          label: new Date(month + '-01').toLocaleDateString('en-US', {month:'short', year:'2-digit'}),
+          csat:  d.csatTotal > 0 ? Math.round(d.csatHigh / d.csatTotal * 100) : null,
+          nps:   d.npsTotal  > 0 ? Math.round((d.npsP / d.npsTotal - d.npsD / d.npsTotal) * 100) : null,
+        }))
+        .filter(d => d.csat !== null || d.nps !== null);
+    };
+
     crossProgramData = {
       // Respondent counts
       obCount:  (obAll  || []).length,
@@ -203,6 +238,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
           return [p, +(rows.filter(r => r.overall_sat >= 4).length / rows.length * 100).toFixed(1)];
         }).filter(([,v]) => v !== null)
       ),
+      monthlyTrend: buildMonthlyTrend(),
       npsPrograms: Object.fromEntries(
         allPrograms.map(p => {
           const rows = (eopAll || []).filter(r => r.program === p && r.nps_score != null);
@@ -746,7 +782,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
       {/* ── CROSS-PROGRAM VIEW ──────────────────────────────────────────── */}
       {program === 'CROSS-PROGRAM' && (
-        <main className="flex-1 p-10 overflow-y-auto relative z-10">
+        <div className="flex-1 overflow-y-auto relative z-10 p-10">
           <header className="mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight" style={{
               background: 'linear-gradient(135deg, #05F283 0%, #27DEF2 100%)',
@@ -837,7 +873,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                         <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
                         <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
                           <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
-                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 80 ? colors.springGreen : pctNum >= 60 ? colors.blueNCS : colors.gold }}>
+                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 90 ? '#5d9146' : pctNum >= 80 ? '#028ECA' : '#F97316' }}>
                             <span className="text-[9px] font-black text-white">{pctNum}%</span>
                           </div>
                         </div>
@@ -861,7 +897,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                         <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
                         <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
                           <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
-                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 80 ? colors.turquoise : pctNum >= 60 ? colors.blueNCS : colors.gold }}>
+                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 90 ? '#5d9146' : pctNum >= 80 ? '#028ECA' : '#F97316' }}>
                             <span className="text-[9px] font-black text-white">{pctNum}%</span>
                           </div>
                         </div>
@@ -881,7 +917,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                       .map(([prog, score]) => {
                         const scoreNum = Number(score);
                         const barW = Math.min(100, Math.max(2, (scoreNum + 100) / 2));
-                        const col = scoreNum >= 30 ? colors.springGreen : scoreNum >= 0 ? colors.blueNCS : colors.tomato;
+                        const col = scoreNum >= 80 ? '#5d9146' : scoreNum >= 70 ? '#028ECA' : '#F97316';
                         return (
                           <div key={prog} className="flex items-center gap-3">
                             <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
@@ -947,17 +983,101 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
               Percentage of respondents scoring 4 or 5 — averaged across all programs with data for the selected period.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {crossProgramData.ob_sat        != null && <InsightRow pct={Math.round((crossProgramData.ob_sat / 5) * 100)} text="average onboarding satisfaction across all programs." isDark={isDark} t={t} />}
-              {crossProgramData.ob_expectations != null && <InsightRow pct={Math.round((crossProgramData.ob_expectations / 5) * 100)} text="of learners understand program expectations across all programs." isDark={isDark} t={t} />}
-              {crossProgramData.ob_peers       != null && <InsightRow pct={Math.round((crossProgramData.ob_peers / 5) * 100)} text="know how to connect with peers and Community Ambassadors." isDark={isDark} t={t} />}
-              {crossProgramData.ob_comms       != null && <InsightRow pct={Math.round((crossProgramData.ob_comms / 5) * 100)} text="found communications clear and useful across all programs." isDark={isDark} t={t} />}
-              {crossProgramData.eop_overall    != null && <InsightRow pct={Math.round((crossProgramData.eop_overall / 5) * 100)} text="overall satisfaction at program completion across all programs." isDark={isDark} t={t} />}
-              {crossProgramData.eop_career     != null && <InsightRow pct={Math.round((crossProgramData.eop_career / 5) * 100)} text="feel the program was effective in advancing their careers." isDark={isDark} t={t} />}
-              {crossProgramData.eop_lea        != null && <InsightRow pct={Math.round((crossProgramData.eop_lea / 5) * 100)} text="found LEA AI Assistant accessible and useful across all programs." isDark={isDark} t={t} />}
-              {crossProgramData.eop_hub        != null && <InsightRow pct={Math.round((crossProgramData.eop_hub / 5) * 100)} text="found the Resources Hub essential for supporting their journey." isDark={isDark} t={t} />}
+              {crossProgramData.ob_sat        != null && <InsightRow pct={Math.round((crossProgramData.ob_sat / 5) * 100)} text="are satisfied with their overall onboarding experience across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.ob_expectations != null && <InsightRow pct={Math.round((crossProgramData.ob_expectations / 5) * 100)} text="understand the program expectations and graduation requirements." isDark={isDark} t={t} />}
+              {crossProgramData.ob_peers       != null && <InsightRow pct={Math.round((crossProgramData.ob_peers / 5) * 100)} text="know how to connect with peers and Community Ambassadors across all programs." isDark={isDark} t={t} />}
+              {crossProgramData.ob_comms       != null && <InsightRow pct={Math.round((crossProgramData.ob_comms / 5) * 100)} text="found program communications clear and useful." isDark={isDark} t={t} />}
+              {crossProgramData.eop_overall    != null && <InsightRow pct={Math.round((crossProgramData.eop_overall / 5) * 100)} text="are satisfied with their overall experience at program completion." isDark={isDark} t={t} />}
+              {crossProgramData.eop_career     != null && <InsightRow pct={Math.round((crossProgramData.eop_career / 5) * 100)} text="feel the program was highly effective in enhancing their skills and advancing their careers." isDark={isDark} t={t} />}
+              {crossProgramData.eop_lea        != null && <InsightRow pct={Math.round((crossProgramData.eop_lea / 5) * 100)} text="found the LEA AI Assistant easily accessible and useful when facing challenges." isDark={isDark} t={t} />}
+              {crossProgramData.eop_hub        != null && <InsightRow pct={Math.round((crossProgramData.eop_hub / 5) * 100)} text="found the Program Guides and Resources Hub essential for supporting their learning journey." isDark={isDark} t={t} />}
             </div>
           </section>
-        </main>
+
+          {/* ── Monthly CSAT & NPS Trend Chart ── */}
+          {(crossProgramData.monthlyTrend || []).length > 1 && (
+          <section className="p-8 rounded-3xl shadow-xl border mt-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+            <h3 className="text-xl font-black mb-2 uppercase tracking-tight" style={{ color: t.textMain }}>
+              MONTHLY CSAT & NPS TREND
+            </h3>
+            <p className="text-xs mb-8" style={{ color: t.textMuted }}>
+              Monthly average CSAT % (all onboarding + EOP responses) and NPS score across all programs — all time, unfiltered by period selector.
+            </p>
+            {(() => {
+              const trend = crossProgramData.monthlyTrend || [];
+              const w = 900; const h = 280; const pad = { t:20, r:20, b:50, l:55 };
+              const chartW = w - pad.l - pad.r;
+              const chartH = h - pad.t - pad.b;
+              const n = trend.length;
+              if (n < 2) return null;
+
+              // Scales
+              const csatVals = trend.map((d:any) => d.csat).filter((v:any) => v !== null) as number[];
+              const npsVals  = trend.map((d:any) => d.nps ).filter((v:any) => v !== null) as number[];
+              const csatMin = 0; const csatMax = 100;
+              const npsMin  = Math.min(-20, ...npsVals); const npsMax = Math.max(100, ...npsVals);
+
+              const xPos  = (i:number) => pad.l + (i / (n-1)) * chartW;
+              const yCSAT = (v:number) => pad.t + chartH - ((v - csatMin) / (csatMax - csatMin)) * chartH;
+              const yNPS  = (v:number) => pad.t + chartH - ((v - npsMin)  / (npsMax  - npsMin))  * chartH;
+
+              // Build polyline points
+              const csatPoints = trend
+                .map((d:any, i:number) => d.csat !== null ? `${xPos(i)},${yCSAT(d.csat)}` : null)
+                .filter(Boolean).join(' ');
+              const npsPoints = trend
+                .map((d:any, i:number) => d.nps !== null ? `${xPos(i)},${yNPS(d.nps)}` : null)
+                .filter(Boolean).join(' ');
+
+              const gridLines = [0, 25, 50, 75, 100];
+              const cardBgColor = isDark ? '#002B56' : '#ffffff';
+              const gridColor   = isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
+              const textColor   = isDark ? '#94A3B8' : '#64748B';
+
+              return (
+                <div className="overflow-x-auto">
+                  <svg viewBox={`0 0 ${w} ${h}`} style={{ width:'100%', minWidth:'600px', fontFamily:'Ubuntu,sans-serif' }}>
+                    {/* Grid lines */}
+                    {gridLines.map(g => (
+                      <g key={g}>
+                        <line x1={pad.l} y1={yCSAT(g)} x2={w-pad.r} y2={yCSAT(g)} stroke={gridColor} strokeWidth="1" />
+                        <text x={pad.l-8} y={yCSAT(g)+4} textAnchor="end" fontSize="9" fill={textColor}>{g}%</text>
+                      </g>
+                    ))}
+                    {/* CSAT line */}
+                    <polyline points={csatPoints} fill="none" stroke="#5d9146" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    {/* NPS line */}
+                    <polyline points={npsPoints} fill="none" stroke="#028ECA" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6,3" />
+                    {/* Data points + labels — CSAT */}
+                    {trend.map((d:any, i:number) => d.csat !== null && (
+                      <g key={"c"+i}>
+                        <circle cx={xPos(i)} cy={yCSAT(d.csat)} r="4" fill="#5d9146" />
+                        <text x={xPos(i)} y={yCSAT(d.csat)-8} textAnchor="middle" fontSize="8" fill="#5d9146" fontWeight="bold">{d.csat}%</text>
+                      </g>
+                    ))}
+                    {/* Data points + labels — NPS */}
+                    {trend.map((d:any, i:number) => d.nps !== null && (
+                      <g key={"n"+i}>
+                        <circle cx={xPos(i)} cy={yNPS(d.nps)} r="4" fill="#028ECA" />
+                        <text x={xPos(i)} y={yNPS(d.nps)-8} textAnchor="middle" fontSize="8" fill="#028ECA" fontWeight="bold">{d.nps > 0 ? '+' : ''}{d.nps}</text>
+                      </g>
+                    ))}
+                    {/* X axis labels */}
+                    {trend.map((d:any, i:number) => (
+                      <text key={"l"+i} x={xPos(i)} y={h-pad.b+18} textAnchor="middle" fontSize="9" fill={textColor}>{d.label}</text>
+                    ))}
+                    {/* Legend */}
+                    <rect x={pad.l} y={h-14} width="10" height="3" fill="#5d9146" rx="1" />
+                    <text x={pad.l+14} y={h-10} fontSize="9" fill={textColor}>Avg CSAT %</text>
+                    <line x1={pad.l+80} y1={h-12} x2={pad.l+90} y2={h-12} stroke="#028ECA" strokeWidth="2" strokeDasharray="4,2" />
+                    <text x={pad.l+94} y={h-10} fontSize="9" fill={textColor}>Avg NPS</text>
+                  </svg>
+                </div>
+              );
+            })()}
+          </section>
+          )}
+        </div>
       )}
     </div>
   );
@@ -991,7 +1111,7 @@ function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any
 
 // ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 function CrossMetricBar({ label, value, isDark, t }: any) {
-  const v = Number(value); const color = v >= 80 ? colors.springGreen : v >= 60 ? colors.blueNCS : colors.gold;
+  const v = Number(value); const color = v >= 90 ? '#5d9146' : v >= 80 ? '#028ECA' : '#F97316';
   return (
     <div className="flex items-center gap-4 py-2">
       <span className="text-[10px] font-black uppercase w-44 shrink-0 truncate" style={{ color: t.textMuted }}>{label}</span>
@@ -1003,7 +1123,7 @@ function CrossMetricBar({ label, value, isDark, t }: any) {
   );
 }
 function CrossNpsBar({ label, value, isDark, t }: any) {
-  const vn = Number(value); const color = vn >= 30 ? colors.springGreen : vn >= 0 ? colors.blueNCS : colors.tomato;
+  const vn = Number(value); const color = vn >= 80 ? '#5d9146' : vn >= 70 ? '#028ECA' : '#F97316';
   const barWidth = Math.min(100, Math.max(0, (vn + 100) / 2)); // map -100..100 to 0..100%
   return (
     <div className="flex items-center gap-4 py-2">
