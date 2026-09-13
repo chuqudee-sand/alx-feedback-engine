@@ -262,7 +262,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   const avgAttendance = activeTab === 'community' || activeTab === 'support' ? calc(entries, 'attendance_duration_mins') : "0";
 
   return (
-    <div className="flex min-h-screen transition-colors duration-500 relative" style={{ fontFamily: "'Ubuntu', sans-serif", backgroundColor: t.bg, color: t.textMain }}>
+    <>
+    <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');`}</style>
+    <div className="flex min-h-screen transition-colors duration-500 relative" style={{ fontFamily: "'Inter', sans-serif", backgroundColor: t.bg, color: t.textMain }}>
       <div className="fixed inset-0 z-0 pointer-events-none flex justify-center items-center" style={{ opacity: isDark ? 0.03 : 0.04 }}>
           <img src={isDark ? "/alx-logo-transparent.png" : "/alx-logo-black.png"} alt="ALX Logo" className="w-[40%] object-contain" style={{ mixBlendMode: isDark ? 'luminosity' : 'multiply' }} />
       </div>
@@ -289,8 +291,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
         </nav>
       </aside>
 
+      {program !== 'CROSS-PROGRAM' && (
       <main className="flex-1 p-10 overflow-y-auto relative z-10">
-        {program !== 'CROSS-PROGRAM' && (<>
+        <>
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
           <div className="mb-6 md:mb-0">
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight flex items-center gap-3" style={{ color: t.textMain }}>
@@ -777,8 +780,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
         )}
-        </>)}
+        </>
       </main>
+      )}
 
       {/* ── CROSS-PROGRAM VIEW ──────────────────────────────────────────── */}
       {program === 'CROSS-PROGRAM' && (
@@ -1036,7 +1040,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
               return (
                 <div className="overflow-x-auto">
-                  <svg viewBox={`0 0 ${w} ${h}`} style={{ width:'100%', minWidth:'600px', fontFamily:'Ubuntu,sans-serif' }}>
+                  <svg viewBox={`0 0 ${w} ${h}`} style={{ width:'100%', minWidth:'600px', fontFamily:'Inter,sans-serif' }}>
                     {/* Grid lines */}
                     {gridLines.map(g => (
                       <g key={g}>
@@ -1080,6 +1084,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
         </div>
       )}
     </div>
+    </>
   );
 }
 
