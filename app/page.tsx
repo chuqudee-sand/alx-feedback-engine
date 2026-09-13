@@ -789,9 +789,9 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
 
           {/* ── Top stat cards ── */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-            <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
-            <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
-            <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? crossProgramData.avgNps : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
+            <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat != null ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
+            <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat != null ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
+            <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? String(crossProgramData.avgNps) : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
             <StatCard label="TOTAL RESPONDENTS (ALL)" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
           </div>
 
@@ -802,16 +802,16 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-2">
               <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: colors.springGreen }}>ONBOARDING CSAT</div>
-              {Object.entries(crossProgramData.obPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, pct]) => (
-                <CrossMetricBar key={prog} label={prog} value={pct as number} isDark={isDark} t={t} />
+              {Object.entries(crossProgramData.obPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
+                <CrossMetricBar key={prog} label={prog} value={Number(pct)} isDark={isDark} t={t} />
               ))}
               <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.turquoise }}>END OF PROGRAM CSAT</div>
-              {Object.entries(crossProgramData.eopPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, pct]) => (
-                <CrossMetricBar key={prog} label={prog} value={pct as number} isDark={isDark} t={t} />
+              {Object.entries(crossProgramData.eopPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
+                <CrossMetricBar key={prog} label={prog} value={Number(pct)} isDark={isDark} t={t} />
               ))}
               <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.electricBlue }}>NPS BY PROGRAM</div>
-              {Object.entries(crossProgramData.npsPrograms || {}).sort(([,a],[,b]) => (b as number)-(a as number)).map(([prog, score]) => (
-                <CrossNpsBar key={prog} label={prog} value={score as number} isDark={isDark} t={t} />
+              {Object.entries(crossProgramData.npsPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, score]) => (
+                <CrossNpsBar key={prog} label={prog} value={Number(score)} isDark={isDark} t={t} />
               ))}
             </div>
           </section>
@@ -829,59 +829,66 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.springGreen }}>ONBOARDING CSAT %</p>
                   <div className="space-y-3">
                     {Object.entries(crossProgramData.obPrograms || {})
-                      .sort(([,a],[,b]) => (b as number) - (a as number))
-                      .map(([prog, pct]) => (
-                      <div key={prog} className="flex items-center gap-3">
+                      .sort(([,a],[,b]) => Number(b) - Number(a))
+                      .map(([prog, pct]) => {
+                        const pctNum = Number(pct);
+                        return (
+                        <div key={prog} className="flex items-center gap-3">
                         <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
                         <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
                           <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
-                            style={{ width: `${pct}%`, backgroundColor: (pct as number) >= 80 ? colors.springGreen : (pct as number) >= 60 ? colors.blueNCS : colors.gold }}>
-                            <span className="text-[9px] font-black text-white">{pct}%</span>
+                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 80 ? colors.springGreen : pctNum >= 60 ? colors.blueNCS : colors.gold }}>
+                            <span className="text-[9px] font-black text-white">{pctNum}%</span>
                           </div>
                         </div>
                       </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               {/* EOP CSAT bars */}
               {Object.keys(crossProgramData.eopPrograms || {}).length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.turquoise }}>EOP CSAT %</p>
                   <div className="space-y-3">
                     {Object.entries(crossProgramData.eopPrograms || {})
-                      .sort(([,a],[,b]) => (b as number) - (a as number))
-                      .map(([prog, pct]) => (
-                      <div key={prog} className="flex items-center gap-3">
+                      .sort(([,a],[,b]) => Number(b) - Number(a))
+                      .map(([prog, pct]) => {
+                        const pctNum = Number(pct);
+                        return (
+                        <div key={prog} className="flex items-center gap-3">
                         <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
                         <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
                           <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
-                            style={{ width: `${pct}%`, backgroundColor: (pct as number) >= 80 ? colors.turquoise : (pct as number) >= 60 ? colors.blueNCS : colors.gold }}>
-                            <span className="text-[9px] font-black text-white">{pct}%</span>
+                            style={{ width: `${pctNum}%`, backgroundColor: pctNum >= 80 ? colors.turquoise : pctNum >= 60 ? colors.blueNCS : colors.gold }}>
+                            <span className="text-[9px] font-black text-white">{pctNum}%</span>
                           </div>
                         </div>
                       </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               {/* NPS bars */}
               {Object.keys(crossProgramData.npsPrograms || {}).length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.electricBlue }}>NPS SCORE (–100 to +100)</p>
                   <div className="space-y-3">
                     {Object.entries(crossProgramData.npsPrograms || {})
-                      .sort(([,a],[,b]) => (b as number) - (a as number))
+                      .sort(([,a],[,b]) => Number(b) - Number(a))
                       .map(([prog, score]) => {
-                        const barW = Math.min(100, Math.max(2, ((score as number) + 100) / 2));
-                        const col = (score as number) >= 30 ? colors.springGreen : (score as number) >= 0 ? colors.blueNCS : colors.tomato;
+                        const scoreNum = Number(score);
+                        const barW = Math.min(100, Math.max(2, (scoreNum + 100) / 2));
+                        const col = scoreNum >= 30 ? colors.springGreen : scoreNum >= 0 ? colors.blueNCS : colors.tomato;
                         return (
                           <div key={prog} className="flex items-center gap-3">
                             <span className="text-[10px] font-black uppercase w-40 shrink-0" style={{ color: t.textMuted }}>{prog}</span>
                             <div className="flex-1 h-6 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
                               <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-700"
                                 style={{ width: `${barW}%`, backgroundColor: col }}>
-                                <span className="text-[9px] font-black text-white">{(score as number) > 0 ? '+' : ''}{score}</span>
+                                <span className="text-[9px] font-black text-white">{scoreNum > 0 ? '+' : ''}{scoreNum}</span>
                               </div>
                             </div>
                           </div>
@@ -984,27 +991,27 @@ function TriggerSummaryButton({ payload, renderUrl, label, isDark, colors }: any
 
 // ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 function CrossMetricBar({ label, value, isDark, t }: any) {
-  const color = value >= 80 ? colors.springGreen : value >= 60 ? colors.blueNCS : colors.gold;
+  const v = Number(value); const color = v >= 80 ? colors.springGreen : v >= 60 ? colors.blueNCS : colors.gold;
   return (
     <div className="flex items-center gap-4 py-2">
       <span className="text-[10px] font-black uppercase w-44 shrink-0 truncate" style={{ color: t.textMuted }}>{label}</span>
       <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
-        <div style={{ width: `${value}%`, backgroundColor: color }} className="h-full rounded-full transition-all duration-700" />
+        <div style={{ width: `${v}%`, backgroundColor: color }} className="h-full rounded-full transition-all duration-700" />
       </div>
-      <span className="text-sm font-black w-14 text-right" style={{ color }}>{value}%</span>
+      <span className="text-sm font-black w-14 text-right" style={{ color }}>{v}%</span>
     </div>
   );
 }
 function CrossNpsBar({ label, value, isDark, t }: any) {
-  const color = value >= 30 ? colors.springGreen : value >= 0 ? colors.blueNCS : colors.tomato;
-  const barWidth = Math.min(100, Math.max(0, (value + 100) / 2)); // map -100..100 to 0..100%
+  const vn = Number(value); const color = vn >= 30 ? colors.springGreen : vn >= 0 ? colors.blueNCS : colors.tomato;
+  const barWidth = Math.min(100, Math.max(0, (vn + 100) / 2)); // map -100..100 to 0..100%
   return (
     <div className="flex items-center gap-4 py-2">
       <span className="text-[10px] font-black uppercase w-44 shrink-0 truncate" style={{ color: t.textMuted }}>{label}</span>
       <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0' }}>
         <div style={{ width: `${barWidth}%`, backgroundColor: color }} className="h-full rounded-full transition-all duration-700" />
       </div>
-      <span className="text-sm font-black w-14 text-right" style={{ color }}>{value > 0 ? '+' : ''}{value}</span>
+      <span className="text-sm font-black w-14 text-right" style={{ color }}>{vn > 0 ? '+' : ''}{vn}</span>
     </div>
   );
 }
