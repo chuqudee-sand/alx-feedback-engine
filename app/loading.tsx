@@ -26,7 +26,7 @@ export default function Loading() {
             Processing Data
           </h2>
           <p className="text-xs font-bold tracking-widest text-zinc-400 uppercase">
-            Fetching Supabase Intelligence...
+            Fetching feedback data, please wait...
           </p>
         </div>
       </div>
