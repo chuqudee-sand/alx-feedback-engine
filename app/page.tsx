@@ -832,7 +832,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat != null ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
             <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat != null ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
             <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? String(crossProgramData.avgNps) : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
-            <StatCard label="TOTAL RESPONDENTS (ALL)" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
+            <StatCard label="TOTAL RESPONDENTS (EOP)" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
           </div>
 
           {/* ── Per-program CSAT breakdown ── */}
