@@ -1005,7 +1005,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
               MONTHLY CSAT & NPS TREND
             </h3>
             <p className="text-xs mb-8" style={{ color: t.textMuted }}>
-              Monthly average CSAT % (all onboarding + EOP responses) and NPS score across all programs — all time, unfiltered by period selector.
+              Monthly average CSAT % (all EOP responses) and NPS score across all programs — all time, unfiltered by period selector.
             </p>
             {(() => {
               const trend = crossProgramData.monthlyTrend || [];
