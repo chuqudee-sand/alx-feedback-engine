@@ -95,163 +95,170 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   const summaryPayload = { program, activeTab, startDate, endDate, activeEvent, reportPeriod };
 
   // ── Cross-Program Data Fetch (only when program === 'CROSS-PROGRAM') ──────────
+  // crossTab: normalises the URL 'tab' param to just 'onboarding' or 'eop' —
+  // Cross-Program only supports these two survey points (no community/support tabs).
+  const crossTab = activeTab === 'eop' ? 'eop' : 'onboarding';
   let crossProgramData: Record<string, any> = {};
   if (program === 'CROSS-PROGRAM') {
     const allPrograms = ['AiCE', 'Virtual Assistant', 'Professional Foundations', 'Data Analytics', 'Content Creation', 'Graphic Design', 'Freelancer Academy'];
 
-    // Fetch onboarding data for all programs
+    // Fetch onboarding data for all programs, for the selected period
     const { data: obAll } = await supabase.from('survey_onboarding').select('program, sat_next_steps, clear_expectations, access_tech_mentors, connect_peers, help_platform_bugs, access_support_tools, know_pause_withdraw, comms_useful').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
 
-    // Fetch EOP data for all programs
+    // Fetch EOP data for all programs, for the selected period
     const { data: eopAll } = await supabase.from('survey_eop').select('program, overall_sat, nps_score, career_impact, supp_events, supp_mentors, supp_mentors_sessions, supp_peerfinder, supp_peers, supp_prog_team, supp_circle, supp_lea, supp_chidi, supp_hub').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
 
-    // Fetch community events CSAT for all programs
-    const { data: eventsAll } = await supabase.from('survey_events').select('program, session_quality_csat').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
-
-    // Helper: average of a column per program, then average of those averages (excluding nulls/zeros)
-    const avgByProg = (data: any[], col: string) => {
-      const byProg: Record<string, number[]> = {};
-      (data || []).forEach(r => {
-        if (r[col] != null && r[col] > 0) {
-          if (!byProg[r.program]) byProg[r.program] = [];
-          byProg[r.program].push(r[col]);
-        }
-      });
-      const progAvgs = Object.values(byProg).map(vals => vals.reduce((a,b) => a+b,0)/vals.length);
-      return progAvgs.length > 0 ? progAvgs.reduce((a,b) => a+b,0)/progAvgs.length : null;
+    // ── POOLED calculations ────────────────────────────────────────────────────
+    // Per PM feedback: pool the underlying responses across programs rather than
+    // averaging each program's own %/score. This weights the portfolio number by
+    // actual response volume instead of giving every program equal weight
+    // regardless of sample size.
+    //   Onboarding CSAT = total satisfied ÷ total valid onboarding CSAT responses
+    //   EOP CSAT        = total satisfied ÷ total valid EOP CSAT responses
+    //   EOP NPS         = (total promoters − total detractors) ÷ total valid NPS responses × 100
+    const pooledCsat = (data: any[], col: string) => {
+      const valid = (data || []).filter((r: any) => r[col] != null);
+      if (!valid.length) return { pct: null, n: 0 };
+      const high = valid.filter((r: any) => r[col] >= 4).length;
+      return { pct: +(high / valid.length * 100).toFixed(1), n: valid.length };
     };
 
-    // CSAT % per program (onboarding: sat_next_steps ≥4, eop: overall_sat ≥4)
-    const csatByProg = (data: any[], col: string) => {
-      const byProg: Record<string, {total:number, high:number}> = {};
-      (data || []).forEach(r => {
-        if (r[col] != null) {
-          if (!byProg[r.program]) byProg[r.program] = {total:0, high:0};
-          byProg[r.program].total++;
-          if (r[col] >= 4) byProg[r.program].high++;
-        }
-      });
-      const progPcts = Object.values(byProg).filter(v => v.total > 0).map(v => v.high/v.total*100);
-      return progPcts.length > 0 ? (progPcts.reduce((a,b)=>a+b,0)/progPcts.length).toFixed(1) : null;
+    const pooledNps = (data: any[]) => {
+      const valid = (data || []).filter((r: any) => r.nps_score != null);
+      if (!valid.length) return { score: null, n: 0 };
+      const p = valid.filter((r: any) => r.nps_score >= 9).length;
+      const d = valid.filter((r: any) => r.nps_score <= 6).length;
+      return { score: Math.round((p / valid.length - d / valid.length) * 100), n: valid.length };
     };
 
-    // NPS per program then average
-    const npsByProg = (data: any[]) => {
-      const byProg: Record<string, {p:number,d:number,total:number}> = {};
-      (data || []).forEach(r => {
-        if (r.nps_score != null) {
-          if (!byProg[r.program]) byProg[r.program] = {p:0,d:0,total:0};
-          byProg[r.program].total++;
-          if (r.nps_score >= 9) byProg[r.program].p++;
-          if (r.nps_score <= 6) byProg[r.program].d++;
-        }
-      });
-      const npsScores = Object.values(byProg).filter(v => v.total > 0).map(v => ((v.p/v.total)-(v.d/v.total))*100);
-      return npsScores.length > 0 ? Math.round(npsScores.reduce((a,b)=>a+b,0)/npsScores.length) : null;
+    // Pooled average for a pillar column — pools every response across all
+    // programs into one set, rather than averaging per-program averages.
+    const pooledAvg = (data: any[], col: string) => {
+      const valid = (data || []).filter((r: any) => r[col] != null && r[col] > 0);
+      if (!valid.length) return null;
+      return valid.reduce((a: number, c: any) => a + c[col], 0) / valid.length;
     };
 
-    // Monthly trend: fetch all years for the trend chart (not filtered by period)
-    const { data: obTrend  } = await supabase.from('survey_onboarding').select('created_at, sat_next_steps').limit(50000);
-    const { data: eopTrend } = await supabase.from('survey_eop').select('created_at, overall_sat, nps_score').limit(50000);
+    // Monthly trend (unfiltered by period selector — always all-time)
+    const { data: obTrendRaw }  = await supabase.from('survey_onboarding').select('created_at, sat_next_steps').limit(50000);
+    const { data: eopTrendRaw } = await supabase.from('survey_eop').select('created_at, overall_sat, nps_score').limit(50000);
 
-    // Build monthly averages: CSAT % and NPS for each month across all programs
-    const buildMonthlyTrend = () => {
-      const months: Record<string, {csatHigh:number, csatTotal:number, npsP:number, npsD:number, npsTotal:number}> = {};
-      const getKey = (dateStr: string) => dateStr?.substring(0, 7); // "2026-07"
+    const monthLabel = (k: string) => new Date(k + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    const getMonthKey = (dateStr: string) => dateStr?.substring(0, 7);
 
-      (obTrend || []).forEach(r => {
-        const k = getKey(r.created_at);
-        if (!k || !r.sat_next_steps) return;
-        if (!months[k]) months[k] = {csatHigh:0, csatTotal:0, npsP:0, npsD:0, npsTotal:0};
-        months[k].csatTotal++;
-        if (r.sat_next_steps >= 4) months[k].csatHigh++;
+    // Onboarding-only monthly CSAT trend (pooled per month)
+    const buildOnboardingTrend = () => {
+      const months: Record<string, { high: number; total: number }> = {};
+      (obTrendRaw || []).forEach((r: any) => {
+        const k = getMonthKey(r.created_at);
+        if (!k || r.sat_next_steps == null) return;
+        if (!months[k]) months[k] = { high: 0, total: 0 };
+        months[k].total++;
+        if (r.sat_next_steps >= 4) months[k].high++;
       });
-      (eopTrend || []).forEach(r => {
-        const k = getKey(r.created_at);
-        if (!k) return;
-        if (!months[k]) months[k] = {csatHigh:0, csatTotal:0, npsP:0, npsD:0, npsTotal:0};
-        if (r.overall_sat) { months[k].csatTotal++; if (r.overall_sat >= 4) months[k].csatHigh++; }
-        if (r.nps_score)   { months[k].npsTotal++; if (r.nps_score >= 9) months[k].npsP++; if (r.nps_score <= 6) months[k].npsD++; }
-      });
-
       return Object.entries(months)
-        .sort(([a],[b]) => a.localeCompare(b))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, d]) => ({ month, label: monthLabel(month), csat: d.total > 0 ? Math.round(d.high / d.total * 100) : null }))
+        .filter(d => d.csat !== null);
+    };
+
+    // EOP-only monthly CSAT + NPS trend (pooled per month)
+    const buildEopTrend = () => {
+      const months: Record<string, { csatHigh: number; csatTotal: number; npsP: number; npsD: number; npsTotal: number }> = {};
+      (eopTrendRaw || []).forEach((r: any) => {
+        const k = getMonthKey(r.created_at);
+        if (!k) return;
+        if (!months[k]) months[k] = { csatHigh: 0, csatTotal: 0, npsP: 0, npsD: 0, npsTotal: 0 };
+        if (r.overall_sat != null) { months[k].csatTotal++; if (r.overall_sat >= 4) months[k].csatHigh++; }
+        if (r.nps_score   != null) { months[k].npsTotal++;  if (r.nps_score >= 9) months[k].npsP++; if (r.nps_score <= 6) months[k].npsD++; }
+      });
+      return Object.entries(months)
+        .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, d]) => ({
           month,
-          label: new Date(month + '-01').toLocaleDateString('en-US', {month:'short', year:'2-digit'}),
-          csat:  d.csatTotal > 0 ? Math.round(d.csatHigh / d.csatTotal * 100) : null,
-          nps:   d.npsTotal  > 0 ? Math.round((d.npsP / d.npsTotal - d.npsD / d.npsTotal) * 100) : null,
+          label: monthLabel(month),
+          csat: d.csatTotal > 0 ? Math.round(d.csatHigh / d.csatTotal * 100) : null,
+          nps:  d.npsTotal  > 0 ? Math.round((d.npsP / d.npsTotal - d.npsD / d.npsTotal) * 100) : null,
         }))
         .filter(d => d.csat !== null || d.nps !== null);
     };
 
+    // Per-program breakdown — kept as individual program %/scores (not pooled),
+    // since this chart is meant to compare programs against each other, not
+    // to produce a single portfolio-wide number.
+    const obPrograms = Object.fromEntries(
+      allPrograms.map(p => {
+        const rows = (obAll || []).filter((r: any) => r.program === p && r.sat_next_steps != null);
+        if (!rows.length) return [p, null];
+        return [p, +(rows.filter((r: any) => r.sat_next_steps >= 4).length / rows.length * 100).toFixed(1)];
+      }).filter(([, v]) => v !== null)
+    );
+    const eopPrograms = Object.fromEntries(
+      allPrograms.map(p => {
+        const rows = (eopAll || []).filter((r: any) => r.program === p && r.overall_sat != null);
+        if (!rows.length) return [p, null];
+        return [p, +(rows.filter((r: any) => r.overall_sat >= 4).length / rows.length * 100).toFixed(1)];
+      }).filter(([, v]) => v !== null)
+    );
+    const npsPrograms = Object.fromEntries(
+      allPrograms.map(p => {
+        const rows = (eopAll || []).filter((r: any) => r.program === p && r.nps_score != null);
+        if (!rows.length) return [p, null];
+        const promoters = rows.filter((r: any) => r.nps_score >= 9).length;
+        const detractors = rows.filter((r: any) => r.nps_score <= 6).length;
+        return [p, Math.round((promoters / rows.length - detractors / rows.length) * 100)];
+      }).filter(([, v]) => v !== null)
+    );
+
+    const obCsatResult  = pooledCsat(obAll  || [], 'sat_next_steps');
+    const eopCsatResult = pooledCsat(eopAll || [], 'overall_sat');
+    const eopNpsResult  = pooledNps(eopAll  || []);
+
     crossProgramData = {
-      // Respondent counts
+      // Separate response counts — Onboarding and EOP are different survey
+      // points feeding different metrics, so they're never combined.
       obCount:  (obAll  || []).length,
       eopCount: (eopAll || []).length,
-      eventsCount: (eventsAll || []).length,
 
-      // Cross-program CSAT averages
-      obCsat:     csatByProg(obAll  || [], 'sat_next_steps'),
-      eopCsat:    csatByProg(eopAll || [], 'overall_sat'),
-      eventsCsat: csatByProg(eventsAll || [], 'session_quality_csat'),
+      // Pooled CSAT / NPS, each with its own n (response count for that metric)
+      obCsat:  obCsatResult.pct,  obCsatN:  obCsatResult.n,
+      eopCsat: eopCsatResult.pct, eopCsatN: eopCsatResult.n,
+      eopNps:  eopNpsResult.score, eopNpsN: eopNpsResult.n,
 
-      // Cross-program NPS average (EOP only)
-      avgNps: npsByProg(eopAll || []),
+      // Pooled onboarding pillar averages (all responses pooled, not per-program-averaged)
+      ob_sat:            pooledAvg(obAll || [], 'sat_next_steps'),
+      ob_expectations:   pooledAvg(obAll || [], 'clear_expectations'),
+      ob_prog_team:      pooledAvg(obAll || [], 'access_tech_mentors'),
+      ob_peers:          pooledAvg(obAll || [], 'connect_peers'),
+      ob_bugs:           pooledAvg(obAll || [], 'help_platform_bugs'),
+      ob_tools:          pooledAvg(obAll || [], 'access_support_tools'),
+      ob_pause:          pooledAvg(obAll || [], 'know_pause_withdraw'),
+      ob_comms:          pooledAvg(obAll || [], 'comms_useful'),
 
-      // Onboarding pillar averages
-      ob_sat:            avgByProg(obAll || [], 'sat_next_steps'),
-      ob_expectations:   avgByProg(obAll || [], 'clear_expectations'),
-      ob_prog_team:      avgByProg(obAll || [], 'access_tech_mentors'),
-      ob_peers:          avgByProg(obAll || [], 'connect_peers'),
-      ob_bugs:           avgByProg(obAll || [], 'help_platform_bugs'),
-      ob_tools:          avgByProg(obAll || [], 'access_support_tools'),
-      ob_pause:          avgByProg(obAll || [], 'know_pause_withdraw'),
-      ob_comms:          avgByProg(obAll || [], 'comms_useful'),
+      // Pooled EOP pillar averages
+      eop_overall:       pooledAvg(eopAll || [], 'overall_sat'),
+      eop_career:        pooledAvg(eopAll || [], 'career_impact'),
+      eop_events:        pooledAvg(eopAll || [], 'supp_events'),
+      eop_mentors:       pooledAvg(eopAll || [], 'supp_mentors'),
+      eop_sessions:      pooledAvg(eopAll || [], 'supp_mentors_sessions'),
+      eop_peerfinder:    pooledAvg(eopAll || [], 'supp_peerfinder'),
+      eop_peers:         pooledAvg(eopAll || [], 'supp_peers'),
+      eop_prog_team:     pooledAvg(eopAll || [], 'supp_prog_team'),
+      eop_circle:        pooledAvg(eopAll || [], 'supp_circle'),
+      eop_lea:           pooledAvg(eopAll || [], 'supp_lea'),
+      eop_chidi:         pooledAvg(eopAll || [], 'supp_chidi'),
+      eop_hub:           pooledAvg(eopAll || [], 'supp_hub'),
 
-      // EOP pillar averages
-      eop_overall:       avgByProg(eopAll || [], 'overall_sat'),
-      eop_career:        avgByProg(eopAll || [], 'career_impact'),
-      eop_events:        avgByProg(eopAll || [], 'supp_events'),
-      eop_mentors:       avgByProg(eopAll || [], 'supp_mentors'),
-      eop_sessions:      avgByProg(eopAll || [], 'supp_mentors_sessions'),
-      eop_peerfinder:    avgByProg(eopAll || [], 'supp_peerfinder'),
-      eop_peers:         avgByProg(eopAll || [], 'supp_peers'),
-      eop_prog_team:     avgByProg(eopAll || [], 'supp_prog_team'),
-      eop_circle:        avgByProg(eopAll || [], 'supp_circle'),
-      eop_lea:           avgByProg(eopAll || [], 'supp_lea'),
-      eop_chidi:         avgByProg(eopAll || [], 'supp_chidi'),
-      eop_hub:           avgByProg(eopAll || [], 'supp_hub'),
+      // Per-program breakdown bars
+      obPrograms, eopPrograms, npsPrograms,
 
-      // Program breakdown for CSAT bar
-      obPrograms: Object.fromEntries(
-        allPrograms.map(p => {
-          const rows = (obAll || []).filter(r => r.program === p && r.sat_next_steps != null);
-          if (!rows.length) return [p, null];
-          return [p, +(rows.filter(r => r.sat_next_steps >= 4).length / rows.length * 100).toFixed(1)];
-        }).filter(([,v]) => v !== null)
-      ),
-      eopPrograms: Object.fromEntries(
-        allPrograms.map(p => {
-          const rows = (eopAll || []).filter(r => r.program === p && r.overall_sat != null);
-          if (!rows.length) return [p, null];
-          return [p, +(rows.filter(r => r.overall_sat >= 4).length / rows.length * 100).toFixed(1)];
-        }).filter(([,v]) => v !== null)
-      ),
-      monthlyTrend: buildMonthlyTrend(),
-      npsPrograms: Object.fromEntries(
-        allPrograms.map(p => {
-          const rows = (eopAll || []).filter(r => r.program === p && r.nps_score != null);
-          if (!rows.length) return [p, null];
-          const promoters = rows.filter(r => r.nps_score >= 9).length;
-          const detractors = rows.filter(r => r.nps_score <= 6).length;
-          return [p, Math.round((promoters/rows.length - detractors/rows.length)*100)];
-        }).filter(([,v]) => v !== null)
-      ),
+      // Two separate trend series — each tab shows only its own trend
+      onboardingTrend: buildOnboardingTrend(),
+      eopTrend:        buildEopTrend(),
     };
   }
 
-    const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
+  const csatCol = { onboarding: 'sat_next_steps', community: 'session_quality_csat', support: 'session_quality_csat', eop: 'overall_sat' }[activeTab];
   // For community/support: divide by respondents who actually answered the CSAT question,
   // not total attendees (many attend without submitting the survey poll).
   // For onboarding/eop: every row IS a survey response so total is correct.
@@ -273,7 +280,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
         <div><h1 className="text-xl font-black tracking-tighter mb-4 leading-tight">FEEDBACK ANALYSIS</h1><div className="h-1 w-12" style={{ backgroundColor: colors.springGreen }} /></div>
         <nav className="flex flex-col gap-2">
           {/* Cross-Program — visually distinct entry */}
-          <Link href={`/?program=CROSS-PROGRAM&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`}
+          <Link href={`/?program=CROSS-PROGRAM&tab=${activeTab === 'eop' ? 'eop' : 'onboarding'}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`}
             className="px-5 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-2 mt-1"
             style={{
               background: program === 'CROSS-PROGRAM'
@@ -787,39 +794,50 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
       {/* ── CROSS-PROGRAM VIEW ──────────────────────────────────────────── */}
       {program === 'CROSS-PROGRAM' && (
         <div className="flex-1 overflow-y-auto relative z-10 p-10">
-          <header className="mb-10 border-b pb-6" style={{ borderColor: t.cardBorder }}>
+          <header className="mb-8 border-b pb-6" style={{ borderColor: t.cardBorder }}>
             <h2 className="text-4xl lg:text-5xl font-black mb-2 tracking-tight" style={{
               background: 'linear-gradient(135deg, #05F283 0%, #27DEF2 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
             }}>CROSS-PROGRAM</h2>
             <p className="text-lg italic font-medium" style={{ color: t.textMuted }}>
-              Average metrics across all active programs — {month === 'All' ? `Full ${quarter}` : month} {year}
+              Portfolio-wide {crossTab === 'onboarding' ? 'Onboarding' : 'End of Program'} metrics, pooled across all active programs — {month === 'All' ? `Full ${quarter}` : month} {year}
             </p>
           </header>
 
-          {/* ── Period selector (reuses existing UI) ── */}
+          {/* ── Sub-tabs: ONBOARDING | END OF PROGRAM (Cross-Program only supports these two) ── */}
+          <div className="flex gap-10 mb-8">
+            {[{ id: 'onboarding', label: 'ONBOARDING' }, { id: 'eop', label: 'END OF PROGRAM' }].map(sub => (
+              <Link key={sub.id} href={`/?program=CROSS-PROGRAM&tab=${sub.id}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`}
+                className={`pb-3 text-sm font-black tracking-widest transition-all border-b-4 whitespace-nowrap ${crossTab === sub.id ? '' : 'border-transparent hover:opacity-70'}`}
+                style={{ color: crossTab === sub.id ? t.textMain : t.textMuted, borderColor: crossTab === sub.id ? colors.springGreen : 'transparent' }}>
+                {sub.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* ── Period selector ── */}
           <div className="flex flex-col items-end gap-3 mb-10">
             <div className="flex gap-2 items-center">
               <div className="flex p-1 rounded-xl shadow-inner" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,43,86,0.05)' }}>
                 {['2025', '2026'].map(y => (
-                  <Link key={y} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${y}&quarter=${quarter}&month=All&theme=${theme}`}
+                  <Link key={y} href={`/?program=CROSS-PROGRAM&tab=${crossTab}&year=${y}&quarter=${quarter}&month=All&theme=${theme}`}
                     className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${year === y ? 'shadow-sm' : 'hover:opacity-70'}`}
                     style={{ backgroundColor: year === y ? t.cardBg : 'transparent', color: year === y ? t.textMain : t.textMuted }}>{y}</Link>
                 ))}
               </div>
               <div className="flex p-1 rounded-xl shadow-inner" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,43,86,0.05)' }}>
                 {['S1', 'S2', 'S3'].map(q => (
-                  <Link key={q} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${q}&month=All&theme=${theme}`}
+                  <Link key={q} href={`/?program=CROSS-PROGRAM&tab=${crossTab}&year=${year}&quarter=${q}&month=All&theme=${theme}`}
                     className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${quarter === q ? 'shadow-sm' : 'hover:opacity-70'}`}
                     style={{ backgroundColor: quarter === q ? t.cardBg : 'transparent', color: quarter === q ? t.textMain : t.textMuted }}>{q}</Link>
                 ))}
               </div>
               <div className="flex gap-1 p-1 rounded-xl border" style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.white, borderColor: t.cardBorder }}>
-                <Link href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
+                <Link href={`/?program=CROSS-PROGRAM&tab=${crossTab}&year=${year}&quarter=${quarter}&month=All&theme=${theme}`}
                   className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === 'All' ? 'shadow-sm' : 'hover:opacity-70'}`}
                   style={{ backgroundColor: month === 'All' ? colors.berkeleyBlue : 'transparent', color: month === 'All' ? colors.white : t.textMuted }}>FULL {quarter}</Link>
                 {quarterMonths[quarter].map(m => (
-                  <Link key={m.val} href={`/?program=CROSS-PROGRAM&tab=onboarding&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
+                  <Link key={m.val} href={`/?program=CROSS-PROGRAM&tab=${crossTab}&year=${year}&quarter=${quarter}&month=${m.val}&theme=${theme}`}
                     className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${month === m.val ? 'shadow-sm' : 'hover:opacity-70'}`}
                     style={{ backgroundColor: month === m.val ? colors.berkeleyBlue : 'transparent', color: month === m.val ? colors.white : t.textMuted }}>{m.name.toUpperCase()}</Link>
                 ))}
@@ -827,44 +845,55 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </div>
 
-          {/* ── Top stat cards ── */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-            <StatCard label="AVG ONBOARDING CSAT" value={crossProgramData.obCsat != null ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
-            <StatCard label="AVG EOP CSAT" value={crossProgramData.eopCsat != null ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
-            <StatCard label="AVG NPS (EOP)" value={crossProgramData.avgNps != null ? String(crossProgramData.avgNps) : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
-            <StatCard label="TOTAL RESPONDENTS (EOP)" value={(crossProgramData.obCount || 0) + (crossProgramData.eopCount || 0)} accent={colors.iris} isDark={isDark} t={t} />
-          </div>
+          {/* ── Top stat cards — pooled CSAT/NPS with response count (n) shown alongside ── */}
+          {crossTab === 'onboarding' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+              <StatCard label={`ONBOARDING CSAT % (POOLED) · n=${crossProgramData.obCsatN || 0}`} value={crossProgramData.obCsat != null ? `${crossProgramData.obCsat}%` : '—'} accent={colors.springGreen} isDark={isDark} t={t} />
+              <StatCard label="TOTAL ONBOARDING RESPONSES" value={crossProgramData.obCount || 0} accent={colors.iris} isDark={isDark} t={t} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <StatCard label={`EOP CSAT % (POOLED) · n=${crossProgramData.eopCsatN || 0}`} value={crossProgramData.eopCsat != null ? `${crossProgramData.eopCsat}%` : '—'} accent={colors.turquoise} isDark={isDark} t={t} />
+              <StatCard label={`NPS (POOLED) · n=${crossProgramData.eopNpsN || 0}`} value={crossProgramData.eopNps != null ? String(crossProgramData.eopNps) : '—'} accent={colors.electricBlue} isDark={isDark} t={t} />
+              <StatCard label="TOTAL EOP RESPONSES" value={crossProgramData.eopCount || 0} accent={colors.iris} isDark={isDark} t={t} />
+            </div>
+          )}
+          <p className="text-xs italic -mt-6 mb-10" style={{ color: t.textMuted }}>
+            Pooled = total satisfied (or promoters − detractors) ÷ total valid responses across all programs combined — weighted by actual response volume, not a simple average of each program's own score.
+          </p>
 
-          {/* ── Per-program CSAT breakdown ── */}
+          {/* ── Per-program breakdown ── */}
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight" style={{ color: t.textMain, borderColor: t.cardBorder }}>
-              CSAT % BY PROGRAM <span className="text-[10px] normal-case tracking-normal opacity-60 ml-2">(% scoring 4–5, programs with no data excluded)</span>
+              {crossTab === 'onboarding' ? 'ONBOARDING CSAT % BY PROGRAM' : 'EOP CSAT % & NPS BY PROGRAM'} <span className="text-[10px] normal-case tracking-normal opacity-60 ml-2">(individual program scores — programs with no data excluded)</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-2">
-              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: colors.springGreen }}>ONBOARDING CSAT</div>
-              {Object.entries(crossProgramData.obPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
+              {crossTab === 'onboarding' && Object.entries(crossProgramData.obPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
                 <CrossMetricBar key={prog} label={prog} value={Number(pct)} isDark={isDark} t={t} />
               ))}
-              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.turquoise }}>END OF PROGRAM CSAT</div>
-              {Object.entries(crossProgramData.eopPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
-                <CrossMetricBar key={prog} label={prog} value={Number(pct)} isDark={isDark} t={t} />
-              ))}
-              <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.electricBlue }}>NPS BY PROGRAM</div>
-              {Object.entries(crossProgramData.npsPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, score]) => (
-                <CrossNpsBar key={prog} label={prog} value={Number(score)} isDark={isDark} t={t} />
-              ))}
+              {crossTab === 'eop' && (
+                <>
+                  <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: colors.turquoise }}>END OF PROGRAM CSAT</div>
+                  {Object.entries(crossProgramData.eopPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, pct]) => (
+                    <CrossMetricBar key={prog} label={prog} value={Number(pct)} isDark={isDark} t={t} />
+                  ))}
+                  <div className="col-span-2 text-[10px] font-black uppercase tracking-widest mt-6 mb-2" style={{ color: colors.electricBlue }}>NPS BY PROGRAM</div>
+                  {Object.entries(crossProgramData.npsPrograms || {}).sort(([,a],[,b]) => Number(b)-Number(a)).map(([prog, score]) => (
+                    <CrossNpsBar key={prog} label={prog} value={Number(score)} isDark={isDark} t={t} />
+                  ))}
+                </>
+              )}
             </div>
           </section>
 
           {/* ── Bar chart: CSAT & NPS per program ── */}
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-2 uppercase tracking-tight" style={{ color: t.textMain }}>
-              CSAT & NPS COMPARISON CHART
+              {crossTab === 'onboarding' ? 'ONBOARDING CSAT COMPARISON CHART' : 'EOP CSAT & NPS COMPARISON CHART'}
             </h3>
-            <p className="text-xs mb-8" style={{ color: t.textMuted }}>Onboarding CSAT %, EOP CSAT %, and NPS score per program for the selected period. Programs with no data are excluded.</p>
+            <p className="text-xs mb-8" style={{ color: t.textMuted }}>Individual program scores for the selected period. Programs with no data are excluded.</p>
             <div className="space-y-8">
-              {/* Onboarding CSAT bars */}
-              {Object.keys(crossProgramData.obPrograms || {}).length > 0 && (
+              {crossTab === 'onboarding' && Object.keys(crossProgramData.obPrograms || {}).length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.springGreen }}>ONBOARDING CSAT %</p>
                   <div className="space-y-3">
@@ -887,8 +916,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                     </div>
                   </div>
                 )}
-              {/* EOP CSAT bars */}
-              {Object.keys(crossProgramData.eopPrograms || {}).length > 0 && (
+              {crossTab === 'eop' && Object.keys(crossProgramData.eopPrograms || {}).length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.turquoise }}>EOP CSAT %</p>
                   <div className="space-y-3">
@@ -911,8 +939,7 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
                     </div>
                   </div>
                 )}
-              {/* NPS bars */}
-              {Object.keys(crossProgramData.npsPrograms || {}).length > 0 && (
+              {crossTab === 'eop' && Object.keys(crossProgramData.npsPrograms || {}).length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: colors.electricBlue }}>NPS SCORE (–100 to +100)</p>
                   <div className="space-y-3">
@@ -940,10 +967,11 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             </div>
           </section>
 
-          {/* ── Onboarding pillar averages ── */}
+          {/* ── Pillar averages (pooled) ── */}
+          {crossTab === 'onboarding' && (
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
-              AVG ONBOARDING PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
+              ONBOARDING PILLARS (POOLED) <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale, all onboarding responses pooled across programs)</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
               {crossProgramData.ob_sat        != null && <Metric label="ONBOARDING SATISFACTION"    val={crossProgramData.ob_sat.toFixed(1)}          type="sat"   isDark={isDark} t={t} />}
@@ -956,11 +984,12 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
               {crossProgramData.ob_comms       != null && <Metric label="COMMS CLARITY & USEFULNESS" val={crossProgramData.ob_comms.toFixed(1)}          type="help"  isDark={isDark} t={t} />}
             </div>
           </section>
+          )}
 
-          {/* ── EOP pillar averages ── */}
+          {crossTab === 'eop' && (
           <section className="p-8 rounded-3xl shadow-xl border mb-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
             <h3 className="text-xl font-black mb-8 border-b pb-4 uppercase tracking-tight flex items-end gap-2" style={{ color: t.textMain, borderColor: t.cardBorder }}>
-              AVG END OF PROGRAM PILLARS <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale across all programs)</span>
+              END OF PROGRAM PILLARS (POOLED) <span className="text-[10px] normal-case tracking-normal mb-1 opacity-70">(average scale, all EOP responses pooled across programs)</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
               {crossProgramData.eop_overall  != null && <Metric label="OVERALL EXPERIENCE"        val={crossProgramData.eop_overall.toFixed(1)}   type="sat"   isDark={isDark} t={t} />}
@@ -977,110 +1006,121 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
               {crossProgramData.eop_hub      != null && <Metric label="RESOURCES HUB"             val={crossProgramData.eop_hub.toFixed(1)}       type="agree" isDark={isDark} t={t} />}
             </div>
           </section>
+          )}
 
-          {/* ── Key Sentiment Insights (cross-program) ── */}
+          {/* ── Key Sentiment Insights (pooled cross-program) ── */}
+          {crossTab === 'onboarding' && (
           <section className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}>
             <h3 className="text-2xl font-black mb-2 uppercase tracking-tight flex items-end gap-3" style={{ color: t.textMain }}>
-              CROSS-PROGRAM INSIGHTS <span className="text-sm normal-case tracking-normal opacity-70 mb-1">(top-box % averaged across all programs)</span>
+              CROSS-PROGRAM ONBOARDING INSIGHTS <span className="text-sm normal-case tracking-normal opacity-70 mb-1">(top-box %, pooled across all programs)</span>
             </h3>
             <p className="text-sm italic mb-8" style={{ color: t.textMuted }}>
-              Percentage of respondents scoring 4 or 5 — averaged across all programs with data for the selected period.
+              Percentage of respondents scoring 4 or 5 — calculated from all onboarding responses pooled together, not averaged per program.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {crossProgramData.ob_sat        != null && <InsightRow pct={Math.round((crossProgramData.ob_sat / 5) * 100)} text="are satisfied with their overall onboarding experience across all programs." isDark={isDark} t={t} />}
               {crossProgramData.ob_expectations != null && <InsightRow pct={Math.round((crossProgramData.ob_expectations / 5) * 100)} text="understand the program expectations and graduation requirements." isDark={isDark} t={t} />}
               {crossProgramData.ob_peers       != null && <InsightRow pct={Math.round((crossProgramData.ob_peers / 5) * 100)} text="know how to connect with peers and Community Ambassadors across all programs." isDark={isDark} t={t} />}
               {crossProgramData.ob_comms       != null && <InsightRow pct={Math.round((crossProgramData.ob_comms / 5) * 100)} text="found program communications clear and useful." isDark={isDark} t={t} />}
+            </div>
+          </section>
+          )}
+
+          {crossTab === 'eop' && (
+          <section className="p-10 rounded-3xl shadow-2xl border-t-8 mt-4" style={{ backgroundColor: t.cardBg, borderColor: colors.turquoise }}>
+            <h3 className="text-2xl font-black mb-2 uppercase tracking-tight flex items-end gap-3" style={{ color: t.textMain }}>
+              CROSS-PROGRAM END OF PROGRAM INSIGHTS <span className="text-sm normal-case tracking-normal opacity-70 mb-1">(top-box %, pooled across all programs)</span>
+            </h3>
+            <p className="text-sm italic mb-8" style={{ color: t.textMuted }}>
+              Percentage of respondents scoring 4 or 5 — calculated from all EOP responses pooled together, not averaged per program.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {crossProgramData.eop_overall    != null && <InsightRow pct={Math.round((crossProgramData.eop_overall / 5) * 100)} text="are satisfied with their overall experience at program completion." isDark={isDark} t={t} />}
               {crossProgramData.eop_career     != null && <InsightRow pct={Math.round((crossProgramData.eop_career / 5) * 100)} text="feel the program was highly effective in enhancing their skills and advancing their careers." isDark={isDark} t={t} />}
               {crossProgramData.eop_lea        != null && <InsightRow pct={Math.round((crossProgramData.eop_lea / 5) * 100)} text="found the LEA AI Assistant easily accessible and useful when facing challenges." isDark={isDark} t={t} />}
               {crossProgramData.eop_hub        != null && <InsightRow pct={Math.round((crossProgramData.eop_hub / 5) * 100)} text="found the Program Guides and Resources Hub essential for supporting their learning journey." isDark={isDark} t={t} />}
             </div>
           </section>
+          )}
 
-          {/* ── Monthly CSAT & NPS Trend Chart ── */}
-          {(crossProgramData.monthlyTrend || []).length > 1 && (
-          <section className="p-8 rounded-3xl shadow-xl border mt-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
-            <h3 className="text-xl font-black mb-2 uppercase tracking-tight" style={{ color: t.textMain }}>
-              MONTHLY CSAT & NPS TREND
-            </h3>
-            <p className="text-xs mb-8" style={{ color: t.textMuted }}>
-              Monthly average CSAT % (all EOP responses) and NPS score across all programs — all time, unfiltered by period selector.
-            </p>
-            {(() => {
-              const trend = crossProgramData.monthlyTrend || [];
-              const w = 900; const h = 280; const pad = { t:20, r:20, b:50, l:55 };
-              const chartW = w - pad.l - pad.r;
-              const chartH = h - pad.t - pad.b;
-              const n = trend.length;
-              if (n < 2) return null;
+          {/* ── Monthly Trend Chart — CSAT only on Onboarding tab, CSAT+NPS on EOP tab ── */}
+          {(() => {
+            const trend = crossTab === 'onboarding' ? (crossProgramData.onboardingTrend || []) : (crossProgramData.eopTrend || []);
+            if (trend.length < 2) return null;
 
-              // Scales
-              const csatVals = trend.map((d:any) => d.csat).filter((v:any) => v !== null) as number[];
-              const npsVals  = trend.map((d:any) => d.nps ).filter((v:any) => v !== null) as number[];
-              const csatMin = 0; const csatMax = 100;
-              const npsMin  = Math.min(-20, ...npsVals); const npsMax = Math.max(100, ...npsVals);
+            const w = 900; const h = 280; const pad = { t: 20, r: 20, b: 50, l: 55 };
+            const chartW = w - pad.l - pad.r;
+            const chartH = h - pad.t - pad.b;
+            const n = trend.length;
 
-              const xPos  = (i:number) => pad.l + (i / (n-1)) * chartW;
-              const yCSAT = (v:number) => pad.t + chartH - ((v - csatMin) / (csatMax - csatMin)) * chartH;
-              const yNPS  = (v:number) => pad.t + chartH - ((v - npsMin)  / (npsMax  - npsMin))  * chartH;
+            const npsVals = crossTab === 'eop' ? (trend.map((d: any) => d.nps).filter((v: any) => v !== null) as number[]) : [];
+            const csatMin = 0; const csatMax = 100;
+            const npsMin = crossTab === 'eop' ? Math.min(-20, ...npsVals) : 0;
+            const npsMax = crossTab === 'eop' ? Math.max(100, ...npsVals) : 100;
 
-              // Build polyline points
-              const csatPoints = trend
-                .map((d:any, i:number) => d.csat !== null ? `${xPos(i)},${yCSAT(d.csat)}` : null)
-                .filter(Boolean).join(' ');
-              const npsPoints = trend
-                .map((d:any, i:number) => d.nps !== null ? `${xPos(i)},${yNPS(d.nps)}` : null)
-                .filter(Boolean).join(' ');
+            const xPos  = (i: number) => pad.l + (i / (n - 1)) * chartW;
+            const yCSAT = (v: number) => pad.t + chartH - ((v - csatMin) / (csatMax - csatMin)) * chartH;
+            const yNPS  = (v: number) => pad.t + chartH - ((v - npsMin) / (npsMax - npsMin)) * chartH;
 
-              const gridLines = [0, 25, 50, 75, 100];
-              const cardBgColor = isDark ? '#002B56' : '#ffffff';
-              const gridColor   = isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
-              const textColor   = isDark ? '#94A3B8' : '#64748B';
+            const csatPoints = trend
+              .map((d: any, i: number) => d.csat !== null ? `${xPos(i)},${yCSAT(d.csat)}` : null)
+              .filter(Boolean).join(' ');
+            const npsPoints = crossTab === 'eop' ? trend
+              .map((d: any, i: number) => d.nps !== null ? `${xPos(i)},${yNPS(d.nps)}` : null)
+              .filter(Boolean).join(' ') : '';
 
-              return (
+            const gridLines = [0, 25, 50, 75, 100];
+            const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
+            const textColor = isDark ? '#94A3B8' : '#64748B';
+
+            return (
+              <section className="p-8 rounded-3xl shadow-xl border mt-10" style={{ backgroundColor: t.cardBg, borderColor: t.cardBorder }}>
+                <h3 className="text-xl font-black mb-2 uppercase tracking-tight" style={{ color: t.textMain }}>
+                  {crossTab === 'onboarding' ? 'MONTHLY ONBOARDING CSAT TREND' : 'MONTHLY EOP CSAT & NPS TREND'}
+                </h3>
+                <p className="text-xs mb-8" style={{ color: t.textMuted }}>
+                  {crossTab === 'onboarding'
+                    ? 'Monthly pooled onboarding CSAT % across all programs — all time, unfiltered by the period selector above.'
+                    : 'Monthly pooled EOP CSAT % and NPS across all programs — all time, unfiltered by the period selector above.'}
+                </p>
                 <div className="overflow-x-auto">
-                  <svg viewBox={`0 0 ${w} ${h}`} style={{ width:'100%', minWidth:'600px', fontFamily:'Inter,sans-serif' }}>
-                    {/* Grid lines */}
+                  <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', minWidth: '600px', fontFamily: 'Inter,sans-serif' }}>
                     {gridLines.map(g => (
                       <g key={g}>
-                        <line x1={pad.l} y1={yCSAT(g)} x2={w-pad.r} y2={yCSAT(g)} stroke={gridColor} strokeWidth="1" />
-                        <text x={pad.l-8} y={yCSAT(g)+4} textAnchor="end" fontSize="9" fill={textColor}>{g}%</text>
+                        <line x1={pad.l} y1={yCSAT(g)} x2={w - pad.r} y2={yCSAT(g)} stroke={gridColor} strokeWidth="1" />
+                        <text x={pad.l - 8} y={yCSAT(g) + 4} textAnchor="end" fontSize="9" fill={textColor}>{g}%</text>
                       </g>
                     ))}
-                    {/* CSAT line */}
                     <polyline points={csatPoints} fill="none" stroke="#5d9146" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                    {/* NPS line */}
-                    <polyline points={npsPoints} fill="none" stroke="#028ECA" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6,3" />
-                    {/* Data points + labels — CSAT */}
-                    {trend.map((d:any, i:number) => d.csat !== null && (
-                      <g key={"c"+i}>
+                    {crossTab === 'eop' && <polyline points={npsPoints} fill="none" stroke="#028ECA" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6,3" />}
+                    {trend.map((d: any, i: number) => d.csat !== null && (
+                      <g key={"c" + i}>
                         <circle cx={xPos(i)} cy={yCSAT(d.csat)} r="4" fill="#5d9146" />
-                        <text x={xPos(i)} y={yCSAT(d.csat)-8} textAnchor="middle" fontSize="8" fill="#5d9146" fontWeight="bold">{d.csat}%</text>
+                        <text x={xPos(i)} y={yCSAT(d.csat) - 8} textAnchor="middle" fontSize="8" fill="#5d9146" fontWeight="bold">{d.csat}%</text>
                       </g>
                     ))}
-                    {/* Data points + labels — NPS */}
-                    {trend.map((d:any, i:number) => d.nps !== null && (
-                      <g key={"n"+i}>
+                    {crossTab === 'eop' && trend.map((d: any, i: number) => d.nps !== null && (
+                      <g key={"n" + i}>
                         <circle cx={xPos(i)} cy={yNPS(d.nps)} r="4" fill="#028ECA" />
-                        <text x={xPos(i)} y={yNPS(d.nps)-8} textAnchor="middle" fontSize="8" fill="#028ECA" fontWeight="bold">{d.nps > 0 ? '+' : ''}{d.nps}</text>
+                        <text x={xPos(i)} y={yNPS(d.nps) - 8} textAnchor="middle" fontSize="8" fill="#028ECA" fontWeight="bold">{d.nps > 0 ? '+' : ''}{d.nps}</text>
                       </g>
                     ))}
-                    {/* X axis labels */}
-                    {trend.map((d:any, i:number) => (
-                      <text key={"l"+i} x={xPos(i)} y={h-pad.b+18} textAnchor="middle" fontSize="9" fill={textColor}>{d.label}</text>
+                    {trend.map((d: any, i: number) => (
+                      <text key={"l" + i} x={xPos(i)} y={h - pad.b + 18} textAnchor="middle" fontSize="9" fill={textColor}>{d.label}</text>
                     ))}
-                    {/* Legend */}
-                    <rect x={pad.l} y={h-14} width="10" height="3" fill="#5d9146" rx="1" />
-                    <text x={pad.l+14} y={h-10} fontSize="9" fill={textColor}>Avg CSAT %</text>
-                    <line x1={pad.l+80} y1={h-12} x2={pad.l+90} y2={h-12} stroke="#028ECA" strokeWidth="2" strokeDasharray="4,2" />
-                    <text x={pad.l+94} y={h-10} fontSize="9" fill={textColor}>Avg NPS</text>
+                    <rect x={pad.l} y={h - 14} width="10" height="3" fill="#5d9146" rx="1" />
+                    <text x={pad.l + 14} y={h - 10} fontSize="9" fill={textColor}>{crossTab === 'onboarding' ? 'Onboarding CSAT %' : 'EOP CSAT %'}</text>
+                    {crossTab === 'eop' && (
+                      <>
+                        <line x1={pad.l + 90} y1={h - 12} x2={pad.l + 100} y2={h - 12} stroke="#028ECA" strokeWidth="2" strokeDasharray="4,2" />
+                        <text x={pad.l + 104} y={h - 10} fontSize="9" fill={textColor}>NPS</text>
+                      </>
+                    )}
                   </svg>
                 </div>
-              );
-            })()}
-          </section>
-          )}
+              </section>
+            );
+          })()}
         </div>
       )}
     </div>
