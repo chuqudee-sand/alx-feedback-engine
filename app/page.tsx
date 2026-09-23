@@ -102,11 +102,47 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
   if (program === 'CROSS-PROGRAM') {
     const allPrograms = ['AiCE', 'Virtual Assistant', 'Professional Foundations', 'Data Analytics', 'Content Creation', 'Graphic Design', 'Freelancer Academy'];
 
-    // Fetch onboarding data for all programs, for the selected period
-    const { data: obAll } = await supabase.from('survey_onboarding').select('program, sat_next_steps, clear_expectations, access_tech_mentors, connect_peers, help_platform_bugs, access_support_tools, know_pause_withdraw, comms_useful').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
+    // Supabase caps any single request at 1000 rows regardless of .limit(),
+    // and an uncapped, unordered fetch risks silently missing rows once a
+    // table grows past that (e.g. after a large historical backfill lands
+    // AFTER live-synced rows, so row order no longer matches created_at
+    // order). fetchAllRows pages through with .range() until every matching
+    // row has been retrieved, so pooled totals and the trend chart are
+    // always built from the complete dataset — never a partial snapshot.
+    const fetchAllRows = async (
+      table: string,
+      columns: string,
+      filters?: { gte?: [string, string]; lte?: [string, string] }
+    ) => {
+      const pageSize = 1000;
+      let from = 0;
+      let allRows: any[] = [];
+      while (true) {
+        let q = supabase.from(table).select(columns).range(from, from + pageSize - 1);
+        if (filters?.gte) q = q.gte(filters.gte[0], filters.gte[1]);
+        if (filters?.lte) q = q.lte(filters.lte[0], filters.lte[1]);
+        const { data: page, error } = await q;
+        if (error || !page || page.length === 0) break;
+        allRows = allRows.concat(page);
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+      return allRows;
+    };
 
-    // Fetch EOP data for all programs, for the selected period
-    const { data: eopAll } = await supabase.from('survey_eop').select('program, overall_sat, nps_score, career_impact, supp_events, supp_mentors, supp_mentors_sessions, supp_peerfinder, supp_peers, supp_prog_team, supp_circle, supp_lea, supp_chidi, supp_hub').gte('created_at', startDate).lte('created_at', endDate).limit(50000);
+    // Fetch onboarding data for all programs, for the selected period — paginated for completeness
+    const obAll = await fetchAllRows(
+      'survey_onboarding',
+      'program, sat_next_steps, clear_expectations, access_tech_mentors, connect_peers, help_platform_bugs, access_support_tools, know_pause_withdraw, comms_useful',
+      { gte: ['created_at', startDate], lte: ['created_at', endDate] }
+    );
+
+    // Fetch EOP data for all programs, for the selected period — paginated for completeness
+    const eopAll = await fetchAllRows(
+      'survey_eop',
+      'program, overall_sat, nps_score, career_impact, supp_events, supp_mentors, supp_mentors_sessions, supp_peerfinder, supp_peers, supp_prog_team, supp_circle, supp_lea, supp_chidi, supp_hub',
+      { gte: ['created_at', startDate], lte: ['created_at', endDate] }
+    );
 
     // ── POOLED calculations ────────────────────────────────────────────────────
     // Per PM feedback: pool the underlying responses across programs rather than
@@ -139,9 +175,10 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
       return valid.reduce((a: number, c: any) => a + c[col], 0) / valid.length;
     };
 
-    // Monthly trend (unfiltered by period selector — always all-time)
-    const { data: obTrendRaw }  = await supabase.from('survey_onboarding').select('created_at, sat_next_steps').limit(50000);
-    const { data: eopTrendRaw } = await supabase.from('survey_eop').select('created_at, overall_sat, nps_score').limit(50000);
+    // Monthly trend (unfiltered by period selector — always all-time) — paginated
+    // so a month isn't silently under/over-represented once the table grows.
+    const obTrendRaw  = await fetchAllRows('survey_onboarding', 'created_at, sat_next_steps');
+    const eopTrendRaw = await fetchAllRows('survey_eop', 'created_at, overall_sat, nps_score');
 
     const monthLabel = (k: string) => new Date(k + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     const getMonthKey = (dateStr: string) => dateStr?.substring(0, 7);
