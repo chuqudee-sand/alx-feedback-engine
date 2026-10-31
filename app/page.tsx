@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createClient as createAuthClient } from '../lib/supabase/server';
+import { isAllowedStaff } from '../lib/auth';
 
 export const dynamic = 'force-dynamic';
+export const metadata = { robots: { index: false, follow: false } };
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -17,6 +21,15 @@ const colors = {
 
 export default async function Dashboard(props: { searchParams: Promise<{ program?: string; tab?: string; year?: string; quarter?: string; month?: string; theme?: string; event?: string }>; }) {
   const params = await props.searchParams;
+
+  // ── Staff-only gate ─────────────────────────────────────────────────────────
+  // proxy.ts already turns anonymous visitors away. This is the second lock: no
+  // database query below can run unless the caller is signed-in ALX staff.
+  const authClient = await createAuthClient();
+  const { data: claimsData } = await authClient.auth.getClaims();
+  const staff = claimsData?.claims;
+  if (!isAllowedStaff(staff)) redirect('/login');
+  const staffEmail = (staff?.email as string | undefined) ?? '';
   const program = params.program || 'AiCE'; 
   const activeTab = params.tab || 'onboarding';
   const year = params.year || '2026';
@@ -333,6 +346,13 @@ export default async function Dashboard(props: { searchParams: Promise<{ program
             <Link key={p} href={`/?program=${p}&tab=${activeTab}&year=${year}&quarter=${quarter}&month=${month}&theme=${theme}`} className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border-l-4 ${program === p ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`} style={{ borderColor: program === p ? colors.springGreen : 'transparent' }}>{p.toUpperCase()}</Link>
           ))}
         </nav>
+        <div className="mt-auto pt-6 border-t border-white/10">
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Signed in as</p>
+          <p className="text-xs font-bold truncate mb-3" title={staffEmail}>{staffEmail}</p>
+          <form action="/auth/signout" method="POST">
+            <button type="submit" className="w-full px-4 py-2 rounded-lg text-[10px] font-black tracking-widest border border-white/20 text-white hover:bg-white/10 transition-all">SIGN OUT</button>
+          </form>
+        </div>
       </aside>
 
       {program !== 'CROSS-PROGRAM' && (
